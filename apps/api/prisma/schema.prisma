@@ -1,0 +1,98 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum UserStatus { INVITED ACTIVE INACTIVE }
+enum EmploymentStatus { ACTIVE ON_LEAVE INACTIVE TERMINATED }
+enum ContractStatus { DRAFT ACTIVE ENDED CANCELLED }
+enum ScheduleType { FIXED FLEXIBLE SHIFT }
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  status       UserStatus @default(INVITED)
+  employeeId   String?  @unique
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+  roles        UserRole[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Role {
+  id          String @id @default(cuid())
+  code        String @unique
+  name        String
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id    String @id @default(cuid())
+  code  String @unique
+  roles RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}
+
+model Employee {
+  id               String @id @default(cuid())
+  employeeNumber   String @unique
+  firstName        String
+  lastName         String
+  workEmail        String @unique
+  jobTitle         String?
+  department       String?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  startDate        DateTime
+  user             User?
+  contracts        Contract[]
+  scheduleId       String?
+  schedule         WorkingSchedule? @relation(fields: [scheduleId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Contract {
+  id          String @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  reference   String @unique
+  startDate   DateTime
+  endDate     DateTime?
+  status      ContractStatus @default(DRAFT)
+  wageAmount  Decimal @db.Decimal(14,2)
+  currency    String @default("INR")
+  scheduleId  String?
+  schedule    WorkingSchedule? @relation(fields: [scheduleId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([employeeId, startDate, endDate])
+}
+
+model WorkingSchedule {
+  id          String @id @default(cuid())
+  name        String
+  type        ScheduleType @default(FIXED)
+  weeklyHours Decimal @db.Decimal(5,2)
+  timezone    String @default("Asia/Kolkata")
+  isActive    Boolean @default(true)
+  employees   Employee[]
+  contracts   Contract[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

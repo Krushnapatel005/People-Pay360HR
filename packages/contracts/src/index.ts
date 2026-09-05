@@ -1,0 +1,22 @@
+export enum UserRole {
+  EMPLOYEE = 'EMPLOYEE',
+  HR_MANAGER = 'HR_MANAGER',
+  TIME_OFF_ADMIN = 'TIME_OFF_ADMIN',
+  HR_PAYROLL_USER = 'HR_PAYROLL_USER',
+  HR_PAYROLL_ADMIN = 'HR_PAYROLL_ADMIN',
+  ADMIN = 'ADMIN',
+}
+
+export enum ContractStatus {
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  ENDED = 'ENDED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum EmploymentStatus {
+  ACTIVE = 'ACTIVE',
+  ON_LEAVE = 'ON_LEAVE',
+  INACTIVE = 'INACTIVE',
+  TERMINATED = 'TERMINATED',
+}
