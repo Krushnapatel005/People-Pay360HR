@@ -4,3 +4,6 @@ export * from './contracts';
 export * from './attendance';
 export * from './time-off';
 export * from './payroll';
+export * from './schedules';
+export * from './users';
+

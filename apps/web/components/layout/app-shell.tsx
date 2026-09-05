@@ -4,17 +4,33 @@ import { Sidebar } from '../layout/sidebar';
 import { Topbar } from '../layout/topbar';
 import { CommandPalette } from '../shared/command-palette';
 import { NotificationsPanel } from '../shared/notifications-panel';
+import { RoleBanner } from '../shared/role-banner';
+import { RoleProvider } from '../../lib/context/role-context';
 
 interface AppShellProps {
   children: React.ReactNode;
 }
 
-export function AppShell({ children }: AppShellProps) {
+function AppShellInner({ children }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [role, setRole] = useState('admin');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Persist theme
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pp360_theme') as 'dark' | 'light' | null;
+      if (saved) setTheme(saved);
+    } catch {}
+  }, []);
+
+  // Apply theme class
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try { localStorage.setItem('pp360_theme', theme); } catch {}
+  }, [theme]);
 
   // Keyboard shortcut Cmd+K
   useEffect(() => {
@@ -26,36 +42,49 @@ export function AppShell({ children }: AppShellProps) {
       if (e.key === 'Escape') {
         setCommandOpen(false);
         setNotificationsOpen(false);
+        setMobileSidebarOpen(false);
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // Apply theme
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-  }, [theme]);
-
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-950 dark:bg-slate-950">
-      {/* Sidebar */}
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} />
+    <div className="flex h-screen overflow-hidden bg-[var(--bg-base)]">
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — always visible on desktop, overlay on mobile */}
+      <div className={`
+        fixed inset-y-0 left-0 z-50 lg:relative lg:z-auto
+        transition-transform duration-300 ease-out
+        ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((v) => !v)}
+          onMobileClose={() => setMobileSidebarOpen(false)}
+        />
+      </div>
 
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Topbar
           onSearchOpen={() => setCommandOpen(true)}
           onNotificationsOpen={() => setNotificationsOpen((v) => !v)}
-          role={role}
-          onRoleChange={setRole}
+          onMobileMenuOpen={() => setMobileSidebarOpen(true)}
           theme={theme}
           onThemeToggle={toggleTheme}
         />
 
-        <main className="flex-1 overflow-y-auto p-5 sm:p-6 lg:p-7">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-7">
           {children}
         </main>
       </div>
@@ -63,6 +92,17 @@ export function AppShell({ children }: AppShellProps) {
       {/* Global overlays */}
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
       <NotificationsPanel open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+
+      {/* Dev-mode role banner */}
+      <RoleBanner />
     </div>
+  );
+}
+
+export function AppShell({ children }: AppShellProps) {
+  return (
+    <RoleProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </RoleProvider>
   );
 }

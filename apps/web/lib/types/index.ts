@@ -1,6 +1,12 @@
 // ─── Core Domain Types ────────────────────────────────────────────────────────
 
-export type Role = 'employee' | 'hr_manager' | 'payroll_admin' | 'admin';
+export type Role =
+  | 'employee'
+  | 'hr_manager'
+  | 'time_off_admin'
+  | 'payroll_user'
+  | 'payroll_admin'
+  | 'admin';
 
 export type Status = 'active' | 'inactive' | 'archived';
 

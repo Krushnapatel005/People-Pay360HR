@@ -1,116 +1,219 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, User, Mail, Phone, Building2, Briefcase, Calendar } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { ArrowLeft, Save, User, Briefcase, Phone, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
+import { ConfirmDialog } from '../../../../components/shared/confirm-dialog';
+import { useUnsavedChanges } from '../../../../hooks/use-unsaved-changes';
+import { useRouter } from 'next/navigation';
+
+// ─── Validation Schema ────────────────────────────────────────────────────────
+const schema = z.object({
+  firstName:    z.string().min(2, 'First name must be at least 2 characters'),
+  lastName:     z.string().min(2, 'Last name must be at least 2 characters'),
+  jobPosition:  z.string().min(2, 'Job position is required'),
+  department:   z.string().min(1, 'Department is required'),
+  workEmail:    z.string().email('Must be a valid email'),
+  workPhone:    z.string().optional(),
+  hireDate:     z.string().min(1, 'Hire date is required'),
+  gender:       z.enum(['male', 'female', 'other', 'prefer_not_to_say']),
+  workLocation: z.string().optional(),
+  managerId:    z.string().optional(),
+  workScheduleId: z.string().optional(),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+const DEPARTMENTS = ['Engineering', 'Human Resources', 'Product', 'Design', 'Finance', 'Sales', 'Operations'];
+
+function FormField({
+  label, error, required, children,
+}: {
+  label: string; error?: string; required?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+        {label} {required && <span className="text-rose-400">*</span>}
+      </label>
+      {children}
+      {error && (
+        <p className="mt-1.5 flex items-center gap-1 text-[11px] text-rose-400">
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const inputClass = (hasError: boolean) =>
+  `w-full px-3 py-2 text-xs rounded-lg border bg-surface-card dark:bg-slate-900/60 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 transition-colors
+  ${hasError
+    ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/30'
+    : 'border-surface-border dark:border-slate-700 focus:border-brand-500 focus:ring-brand-500/30'}`;
 
 export default function NewEmployeePage() {
-  const [step, setStep] = useState(1);
+  const router = useRouter();
+  const [submitted, setSubmitted] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  const {
+    register, handleSubmit, formState: { errors, isDirty, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { gender: 'prefer_not_to_say' },
+  });
+
+  const { showConfirm, guardAction, confirmLeave, cancelLeave } = useUnsavedChanges(isDirty && !submitted);
+
+  function onSubmit(data: FormValues) {
+    // Simulate save
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        console.log('Employee data:', data);
+        setSubmitted(true);
+        setTimeout(() => router.push('/employees'), 500);
+        resolve();
+      }, 800);
+    });
+  }
+
+  if (submitted) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
+          <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Employee created!</h2>
+        <p className="text-sm text-slate-400 mt-1">Redirecting to employees list…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-fade-in max-w-3xl">
       <Breadcrumbs />
-      <Link href="/employees" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-200 transition-colors">
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to Employees
-      </Link>
 
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">New Employee</h1>
-        <p className="mt-1 text-sm text-slate-400">Create a new employee record</p>
-      </div>
-
-      {/* Steps */}
-      <div className="flex items-center gap-3">
-        {['Work Details', 'Personal Info', 'Payroll'].map((s, i) => (
-          <React.Fragment key={s}>
-            <div className={`flex items-center gap-2 text-xs font-medium ${step === i + 1 ? 'text-white' : step > i + 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
-              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                step === i + 1 ? 'bg-brand-600 border-brand-500 text-white' :
-                step > i + 1 ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400' :
-                'bg-slate-800 border-slate-700 text-slate-500'
-              }`}>{i + 1}</span>
-              {s}
-            </div>
-            {i < 2 && <div className="flex-1 h-px bg-slate-800" />}
-          </React.Fragment>
-        ))}
-      </div>
-
-      {/* Form */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-800">
-          <h2 className="text-sm font-semibold text-white">{step === 1 ? 'Work Details' : step === 2 ? 'Personal Information' : 'Payroll Setup'}</h2>
-        </div>
-        <div className="p-6">
-          {step === 1 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {[
-                { id: 'first-name', label: 'First Name', placeholder: 'Aarav', icon: <User className="w-4 h-4" />, type: 'text' },
-                { id: 'last-name', label: 'Last Name', placeholder: 'Mehta', icon: <User className="w-4 h-4" />, type: 'text' },
-                { id: 'work-email', label: 'Work Email', placeholder: 'aarav.mehta@company.com', icon: <Mail className="w-4 h-4" />, type: 'email', colSpan: true },
-                { id: 'job-position', label: 'Job Position', placeholder: 'Senior Software Engineer', icon: <Briefcase className="w-4 h-4" />, type: 'text' },
-                { id: 'department', label: 'Department', placeholder: 'Engineering', icon: <Building2 className="w-4 h-4" />, type: 'text' },
-                { id: 'hire-date', label: 'Hire Date', placeholder: '', icon: <Calendar className="w-4 h-4" />, type: 'date' },
-              ].map((field) => (
-                <div key={field.id} className={field.colSpan ? 'sm:col-span-2' : ''}>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-slate-300 mb-2" htmlFor={field.id}>{field.label}</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">{field.icon}</div>
-                    <input id={field.id} type={field.type} placeholder={field.placeholder}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 input-transition" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {['Date of Birth', 'Gender', 'Marital Status', 'Nationality', 'Personal Email', 'Personal Mobile'].map((label) => (
-                <div key={label}>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-slate-300 mb-2">{label}</label>
-                  <input type="text" placeholder={`Enter ${label.toLowerCase()}`}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 input-transition" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {['Salary Structure', 'Work Schedule', 'Bank Account Number', 'IFSC Code'].map((label) => (
-                <div key={label}>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-slate-300 mb-2">{label}</label>
-                  <input type="text" placeholder={`Select ${label.toLowerCase()}`}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 input-transition" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
           <button
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
-            disabled={step === 1}
-            className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => guardAction(() => router.push('/employees'))}
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-200 transition-colors mb-2"
           >
-            Previous
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Employees
           </button>
-          {step < 3 ? (
-            <button
-              onClick={() => setStep((s) => Math.min(3, s + 1))}
-              className="px-5 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-lg transition-colors shadow-brand-sm"
-            >
-              Next Step
-            </button>
-          ) : (
-            <Link href="/employees" className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors">
-              Create Employee
-            </Link>
-          )}
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">New Employee</h1>
+          <p className="mt-1 text-xs text-slate-500">Fill in the details to add a new employee to your organisation.</p>
         </div>
+        {isDirty && (
+          <span className="text-xs text-amber-400 border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 rounded-lg">
+            Unsaved changes
+          </span>
+        )}
       </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
+        {/* Personal Information */}
+        <div className="bg-surface-card dark:bg-slate-900/80 border border-surface-border dark:border-slate-800 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-surface-border dark:border-slate-800">
+            <User className="w-4 h-4 text-brand-400" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Personal Information</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="First Name" error={errors.firstName?.message} required>
+              <input {...register('firstName')} placeholder="John" className={inputClass(!!errors.firstName)} />
+            </FormField>
+            <FormField label="Last Name" error={errors.lastName?.message} required>
+              <input {...register('lastName')} placeholder="Doe" className={inputClass(!!errors.lastName)} />
+            </FormField>
+            <FormField label="Gender" error={errors.gender?.message} required>
+              <select {...register('gender')} className={inputClass(!!errors.gender)}>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="prefer_not_to_say">Prefer not to say</option>
+              </select>
+            </FormField>
+          </div>
+        </div>
+
+        {/* Work Information */}
+        <div className="bg-surface-card dark:bg-slate-900/80 border border-surface-border dark:border-slate-800 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-surface-border dark:border-slate-800">
+            <Briefcase className="w-4 h-4 text-brand-400" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Work Information</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Job Position" error={errors.jobPosition?.message} required>
+              <input {...register('jobPosition')} placeholder="Software Engineer" className={inputClass(!!errors.jobPosition)} />
+            </FormField>
+            <FormField label="Department" error={errors.department?.message} required>
+              <select {...register('department')} className={inputClass(!!errors.department)}>
+                <option value="">Select department</option>
+                {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Work Email" error={errors.workEmail?.message} required>
+              <input {...register('workEmail')} type="email" placeholder="john.doe@company.com" className={inputClass(!!errors.workEmail)} />
+            </FormField>
+            <FormField label="Hire Date" error={errors.hireDate?.message} required>
+              <input {...register('hireDate')} type="date" className={inputClass(!!errors.hireDate)} />
+            </FormField>
+            <FormField label="Work Location" error={errors.workLocation?.message}>
+              <input {...register('workLocation')} placeholder="Bengaluru HQ" className={inputClass(!!errors.workLocation)} />
+            </FormField>
+          </div>
+        </div>
+
+        {/* Contact */}
+        <div className="bg-surface-card dark:bg-slate-900/80 border border-surface-border dark:border-slate-800 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-surface-border dark:border-slate-800">
+            <Phone className="w-4 h-4 text-brand-400" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Contact</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Work Phone" error={errors.workPhone?.message}>
+              <input {...register('workPhone')} placeholder="+91 98765 43210" className={inputClass(!!errors.workPhone)} />
+            </FormField>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => guardAction(() => router.push('/employees'))}
+            className="px-4 py-2 text-xs font-medium text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800 hover:text-slate-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white rounded-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Save className="w-3.5 h-3.5" />
+            {isSubmitting ? 'Saving…' : 'Save Employee'}
+          </button>
+        </div>
+      </form>
+
+      {/* Unsaved changes confirm dialog */}
+      <ConfirmDialog
+        open={showConfirm}
+        onClose={cancelLeave}
+        onConfirm={confirmLeave}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes. If you leave now, all your changes will be lost."
+        confirmLabel="Discard Changes"
+        cancelLabel="Keep editing"
+        variant="warning"
+      />
     </div>
   );
 }

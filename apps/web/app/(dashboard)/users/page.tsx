@@ -1,110 +1,161 @@
 'use client';
 import React, { useState } from 'react';
-import { Shield, Plus, Search, Lock, User } from 'lucide-react';
-import { Badge } from '../../../components/ui/badge';
+import { Shield, Plus, Search, Edit2, Trash2, UserPlus } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/layout/breadcrumbs';
+import { StatusBadge } from '../../../components/ui/status-badge';
+import { PageGate } from '../../../components/shared/permission-gate';
+import { ConfirmDialog } from '../../../components/shared/confirm-dialog';
+import { EmptyState } from '../../../components/shared/empty-state';
+import { MOCK_USERS } from '../../../lib/mock-data';
+import { formatDate } from '../../../lib/utils';
+import { ROLE_LABELS, ROLE_COLORS, ROLE_BG } from '../../../lib/context/role-context';
+import type { User, Role } from '../../../lib/types';
 
-const ROLES = [
-  { name: 'Admin',         description: 'Full access to all modules', count: 2, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
-  { name: 'HR Manager',    description: 'Employees, contracts, time off', count: 5, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-  { name: 'Payroll Admin', description: 'Payroll, salary structures, payslips', count: 3, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-  { name: 'Employee',      description: 'View own profile and payslips', count: 114, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-];
-
-const MOCK_USERS = [
-  { id: 'u-001', name: 'Aarav Mehta',   email: 'aarav.mehta@peoplepay360.com',  role: 'Admin',         status: 'active',   lastLogin: '2026-09-05T09:00:00Z' },
-  { id: 'u-002', name: 'Priya Sharma',  email: 'priya.sharma@peoplepay360.com', role: 'HR Manager',    status: 'active',   lastLogin: '2026-09-05T08:15:00Z' },
-  { id: 'u-003', name: 'Rohan Gupta',   email: 'rohan.gupta@peoplepay360.com',  role: 'Payroll Admin', status: 'active',   lastLogin: '2026-09-04T17:30:00Z' },
-  { id: 'u-004', name: 'Kavya Nair',    email: 'kavya.nair@peoplepay360.com',   role: 'Payroll Admin', status: 'inactive', lastLogin: '2026-08-20T10:00:00Z' },
-];
+const ALL_ROLES: Role[] = ['employee', 'hr_manager', 'time_off_admin', 'payroll_user', 'payroll_admin', 'admin'];
 
 export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [search, setSearch] = useState('');
-  const filtered = MOCK_USERS.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const filtered = users.filter((u) => {
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase());
+    const matchRole = roleFilter === 'all' || u.role === roleFilter;
+    return matchSearch && matchRole;
+  });
+
+  function handleDelete() {
+    if (!deleteTarget) return;
+    setLoading(true);
+    setTimeout(() => {
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+      setLoading(false);
+      setDeleteTarget(null);
+    }, 600);
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <Breadcrumbs />
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">User Management</h1>
-        <p className="mt-1 text-sm text-slate-400">Manage system users and role-based access control</p>
-      </div>
+    <PageGate roles={['admin']}>
+      <div className="space-y-5 animate-fade-in">
+        <Breadcrumbs />
 
-      {/* Role cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {ROLES.map((role) => (
-          <div key={role.name} className={`flex flex-col gap-3 p-4 bg-slate-900/80 border border-slate-800 rounded-2xl hover:border-slate-700 transition-colors`}>
-            <div className={`w-9 h-9 rounded-xl ${role.bg} border ${role.border} flex items-center justify-center`}>
-              <Shield className={`w-4 h-4 ${role.color}`} />
-            </div>
-            <div>
-              <p className={`text-sm font-semibold ${role.color}`}>{role.name}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">{role.description}</p>
-            </div>
-            <p className="text-xl font-bold text-white">{role.count} <span className="text-xs text-slate-500 font-normal">users</span></p>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+              <Shield className="w-6 h-6 text-violet-400" />
+              User Management
+            </h1>
+            <p className="mt-1 text-xs text-slate-500">Manage system users and role assignments</p>
           </div>
-        ))}
-      </div>
-
-      {/* Users table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-          <h2 className="text-sm font-semibold text-white">All Users</h2>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-              <input type="text" placeholder="Search users…" value={search} onChange={(e) => setSearch(e.target.value)}
-                className="rounded-lg bg-slate-900 border border-slate-800 pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" />
-            </div>
-            <button className="inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-brand-sm transition-all">
-              <Plus className="w-3.5 h-3.5" /> Invite User
-            </button>
-          </div>
+          <button className="inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-all">
+            <UserPlus className="w-3.5 h-3.5" /> Invite User
+          </button>
         </div>
 
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-slate-800 bg-slate-800/30">
-              <th className="py-3 px-4 font-semibold text-slate-300">User</th>
-              <th className="py-3 px-4 font-semibold text-slate-300 hidden md:table-cell">Role</th>
-              <th className="py-3 px-4 font-semibold text-slate-300">Status</th>
-              <th className="py-3 px-4 font-semibold text-slate-300 hidden lg:table-cell">Last Login</th>
-              <th className="py-3 px-4 font-semibold text-slate-300">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/80">
-            {filtered.map((user) => (
-              <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
-                <td className="py-3.5 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500/30 to-brand-700/30 border border-brand-500/20 flex items-center justify-center text-[10px] font-bold text-brand-300 shrink-0">
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">{user.name}</p>
-                      <p className="text-[11px] text-slate-500">{user.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-3.5 px-4 hidden md:table-cell">
-                  <span className="text-xs font-medium text-slate-300 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-md">{user.role}</span>
-                </td>
-                <td className="py-3.5 px-4"><Badge status={user.status} /></td>
-                <td className="py-3.5 px-4 text-slate-500 hidden lg:table-cell">{new Date(user.lastLogin).toLocaleDateString('en-IN')}</td>
-                <td className="py-3.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <button className="text-[10px] px-2.5 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-colors">Edit</button>
-                    <button className="text-[10px] text-red-400 hover:text-red-300 transition-colors">Revoke</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Role summary chips */}
+        <div className="flex flex-wrap gap-2">
+          {ALL_ROLES.map((r) => {
+            const count = users.filter((u) => u.role === r).length;
+            return (
+              <button
+                key={r}
+                onClick={() => setRoleFilter(roleFilter === r ? 'all' : r)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${roleFilter === r ? ROLE_BG[r] + ' ' + ROLE_COLORS[r] : 'border-surface-border dark:border-slate-800 text-slate-400 hover:text-slate-200'}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${ROLE_COLORS[r].replace('text-', 'bg-')}`} />
+                {ROLE_LABELS[r]}
+                <span className="ml-0.5 text-[10px] opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search users…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-surface-card dark:bg-slate-900/60 border border-surface-border dark:border-slate-800 rounded-lg text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+
+        {/* Table */}
+        {filtered.length === 0 ? (
+          <EmptyState icon={Shield} title="No users found" description="No users match your current filter." />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-surface-border dark:border-slate-800 bg-surface-card dark:bg-slate-900/50">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-surface-border dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
+                  <th className="py-3 px-4 font-semibold text-slate-500 dark:text-slate-300">User</th>
+                  <th className="py-3 px-4 font-semibold text-slate-500 dark:text-slate-300 hidden sm:table-cell">Email</th>
+                  <th className="py-3 px-4 font-semibold text-slate-500 dark:text-slate-300">Role</th>
+                  <th className="py-3 px-4 font-semibold text-slate-500 dark:text-slate-300 hidden md:table-cell">Last Login</th>
+                  <th className="py-3 px-4 font-semibold text-slate-500 dark:text-slate-300">Status</th>
+                  <th className="py-3 px-4 font-semibold text-slate-500 dark:text-slate-300">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-border dark:divide-slate-800/80">
+                {filtered.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${ROLE_BG[user.role]} ${ROLE_COLORS[user.role]}`}>
+                          {user.initials}
+                        </div>
+                        <p className="font-medium text-slate-900 dark:text-white">{user.name}</p>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-400 hidden sm:table-cell">{user.email}</td>
+                    <td className="py-3.5 px-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${ROLE_BG[user.role]} ${ROLE_COLORS[user.role]}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${ROLE_COLORS[user.role].replace('text-', 'bg-')}`} />
+                        {ROLE_LABELS[user.role]}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-400 hidden md:table-cell">
+                      {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}
+                    </td>
+                    <td className="py-3.5 px-4"><StatusBadge status={user.status} /></td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <button className="p-1.5 text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 rounded-lg transition-colors" title="Edit user">
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(user)}
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          title="Remove user"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => !loading && setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title={`Remove ${deleteTarget?.name}?`}
+          description="This will revoke their system access. This action cannot be undone."
+          confirmLabel="Remove User"
+          variant="danger"
+          loading={loading}
+        />
       </div>
-    </div>
+    </PageGate>
   );
 }

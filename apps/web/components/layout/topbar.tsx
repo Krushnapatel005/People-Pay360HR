@@ -1,37 +1,63 @@
 'use client';
-import React, { useState } from 'react';
-import { Search, Bell, HelpCircle, Sun, Moon, ChevronDown, LogOut, User, Settings, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Bell, HelpCircle, Sun, Moon, ChevronDown, LogOut, User, Settings, Shield, Menu } from 'lucide-react';
+import { useRole, ROLE_LABELS, ROLE_COLORS } from '../../lib/context/role-context';
+import type { Role } from '../../lib/types';
+
+const ROLES: { id: Role; label: string; color: string }[] = [
+  { id: 'employee',       label: 'Employee',       color: ROLE_COLORS.employee },
+  { id: 'hr_manager',     label: 'HR Manager',     color: ROLE_COLORS.hr_manager },
+  { id: 'time_off_admin', label: 'Time Off Admin', color: ROLE_COLORS.time_off_admin },
+  { id: 'payroll_user',   label: 'Payroll User',   color: ROLE_COLORS.payroll_user },
+  { id: 'payroll_admin',  label: 'Payroll Admin',  color: ROLE_COLORS.payroll_admin },
+  { id: 'admin',          label: 'Admin',          color: ROLE_COLORS.admin },
+];
 
 interface TopbarProps {
   onSearchOpen: () => void;
   onNotificationsOpen: () => void;
-  role: string;
-  onRoleChange: (role: string) => void;
+  onMobileMenuOpen: () => void;
   theme: 'dark' | 'light';
   onThemeToggle: () => void;
 }
 
-const ROLES = [
-  { id: 'employee',      label: 'Employee',       color: 'text-blue-400' },
-  { id: 'hr_manager',   label: 'HR Manager',      color: 'text-emerald-400' },
-  { id: 'payroll_admin', label: 'Payroll Admin',  color: 'text-amber-400' },
-  { id: 'admin',         label: 'Admin',          color: 'text-violet-400' },
-];
-
-export function Topbar({ onSearchOpen, onNotificationsOpen, role, onRoleChange, theme, onThemeToggle }: TopbarProps) {
+export function Topbar({ onSearchOpen, onNotificationsOpen, onMobileMenuOpen, theme, onThemeToggle }: TopbarProps) {
+  const { role, setRole, color } = useRole();
   const [profileOpen, setProfileOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
+  const roleRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
-  const currentRole = ROLES.find((r) => r.id === role) ?? ROLES[2];
+  const currentRole = ROLES.find((r) => r.id === role) ?? ROLES[5];
+
+  // Click outside to close dropdowns
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (roleRef.current && !roleRef.current.contains(e.target as Node)) setRoleOpen(false);
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   return (
-    <header className="h-[60px] flex items-center justify-between px-5 border-b border-slate-800 bg-surface-card/80 dark:bg-slate-900/80 backdrop-blur shrink-0">
-      {/* Left: Search trigger */}
-      <div className="flex items-center gap-3">
+    <header className="h-[60px] flex items-center justify-between px-4 sm:px-5 border-b border-surface-border dark:border-slate-800 bg-[var(--bg-header)] backdrop-blur shrink-0">
+      {/* Left: Mobile menu + Search */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Mobile hamburger */}
+        <button
+          id="mobile-menu-btn"
+          onClick={onMobileMenuOpen}
+          className="p-2 text-slate-500 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors lg:hidden"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="w-4 h-4" />
+        </button>
+
         <button
           id="global-search-trigger"
           onClick={onSearchOpen}
-          className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg transition-all group w-56"
+          className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg transition-all group w-40 sm:w-56"
         >
           <Search className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1 text-left">Search…</span>
@@ -42,36 +68,43 @@ export function Topbar({ onSearchOpen, onNotificationsOpen, role, onRoleChange, 
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-1.5">
-        {/* Role switcher (preview only) */}
-        <div className="relative">
+      <div className="flex items-center gap-1">
+        {/* Role switcher */}
+        <div className="relative" ref={roleRef}>
           <button
             id="role-switcher-btn"
             onClick={() => setRoleOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors border border-slate-800"
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors border border-slate-800"
+            aria-label="Switch preview role"
+            aria-expanded={roleOpen}
           >
-            <Shield className="w-3.5 h-3.5" />
-            <span className={currentRole.color}>{currentRole.label}</span>
-            <ChevronDown className="w-3 h-3 text-slate-600" />
+            <Shield className="w-3.5 h-3.5 shrink-0" />
+            <span className={`hidden sm:inline ${color}`}>{currentRole.label}</span>
+            <ChevronDown className={`w-3 h-3 text-slate-600 transition-transform ${roleOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {roleOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-card animate-scale-in overflow-hidden">
-              <div className="px-3 py-2 border-b border-slate-800">
+            <div className="absolute right-0 top-full mt-1.5 z-50 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-card animate-scale-in overflow-hidden">
+              <div className="px-3 py-2 border-b border-slate-800 flex items-center gap-2">
+                <Shield className="w-3 h-3 text-slate-500" />
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Preview as Role</p>
               </div>
               {ROLES.map((r) => (
                 <button
                   key={r.id}
-                  onClick={() => { onRoleChange(r.id); setRoleOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-slate-800 transition-colors ${
-                    role === r.id ? 'bg-slate-800/60' : ''
-                  }`}
+                  onClick={() => { setRole(r.id); setRoleOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs hover:bg-slate-800 transition-colors ${role === r.id ? 'bg-slate-800/60' : ''}`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${role === r.id ? 'bg-brand-500' : 'bg-slate-700'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${role === r.id ? r.color.replace('text-', 'bg-') : 'bg-slate-700'} shrink-0`} />
                   <span className={role === r.id ? r.color : 'text-slate-400'}>{r.label}</span>
+                  {role === r.id && (
+                    <span className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">ACTIVE</span>
+                  )}
                 </button>
               ))}
+              <div className="px-3 py-2 border-t border-slate-800">
+                <p className="text-[9px] text-slate-600">This is a visual preview. No real authorization.</p>
+              </div>
             </div>
           )}
         </div>
@@ -101,29 +134,30 @@ export function Topbar({ onSearchOpen, onNotificationsOpen, role, onRoleChange, 
           id="theme-toggle-btn"
           onClick={onThemeToggle}
           className="p-2 text-slate-500 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-          aria-label="Toggle theme"
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Divider */}
-        <div className="w-px h-5 bg-slate-800 mx-1" />
+        <div className="w-px h-5 bg-slate-800 mx-0.5" />
 
         {/* Profile */}
-        <div className="relative">
+        <div className="relative" ref={profileRef}>
           <button
             id="profile-menu-btn"
             onClick={() => setProfileOpen((v) => !v)}
-            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 hover:bg-slate-800 rounded-lg transition-colors"
+            className="flex items-center gap-2 pl-1.5 pr-2 py-1.5 hover:bg-slate-800 rounded-lg transition-colors"
+            aria-expanded={profileOpen}
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-[10px] font-bold ring-1 ring-white/10">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-[10px] font-bold ring-1 ring-white/10 shrink-0">
               AM
             </div>
             <div className="hidden sm:block text-left min-w-0">
               <p className="text-xs font-medium text-white truncate max-w-[100px]">Aarav Mehta</p>
-              <p className="text-[10px] text-slate-500 truncate">Admin</p>
+              <p className={`text-[10px] truncate ${color}`}>{ROLE_LABELS[role]}</p>
             </div>
-            <ChevronDown className="w-3 h-3 text-slate-600 hidden sm:block" />
+            <ChevronDown className={`w-3 h-3 text-slate-600 hidden sm:block transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {profileOpen && (
@@ -131,6 +165,7 @@ export function Topbar({ onSearchOpen, onNotificationsOpen, role, onRoleChange, 
               <div className="px-4 py-3 border-b border-slate-800">
                 <p className="text-sm font-semibold text-white">Aarav Mehta</p>
                 <p className="text-xs text-slate-500 mt-0.5">aarav.mehta@peoplepay360.com</p>
+                <p className={`text-[10px] mt-1 font-medium ${color}`}>{ROLE_LABELS[role]}</p>
               </div>
               {[
                 { icon: <User className="w-3.5 h-3.5" />, label: 'My Profile', href: '/employees/emp-001' },

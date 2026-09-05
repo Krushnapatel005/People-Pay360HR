@@ -4,20 +4,28 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, FileText, CalendarClock,
-  Clock, Umbrella, DollarSign, BarChart3, Settings,
+  Clock, Umbrella, Banknote, BarChart3, Settings,
   Shield, ChevronLeft, ChevronRight, ChevronDown,
-  Building2, Banknote,
+  Building2, X,
 } from 'lucide-react';
 import { DotBadge } from '../ui/badge';
+import { useRole } from '../../lib/context/role-context';
 
 interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
   href?: string;
-  children?: { id: string; label: string; href: string; badge?: number }[];
+  /** ids that are checked against ROLE_NAV_ACCESS */
+  accessId?: string;
+  children?: {
+    id: string;
+    label: string;
+    href: string;
+    badge?: number;
+    accessId?: string;
+  }[];
   badge?: number;
-  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -26,23 +34,26 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Dashboard',
     icon: <LayoutDashboard className="w-4 h-4" />,
     href: '/dashboard',
+    accessId: 'dashboard',
   },
   {
     id: 'employees',
     label: 'Employees',
     icon: <Users className="w-4 h-4" />,
+    accessId: 'employees',
     children: [
-      { id: 'emp-list',     label: 'All Employees', href: '/employees' },
-      { id: 'emp-new',      label: 'New Employee',  href: '/employees/new' },
+      { id: 'emp-list', label: 'All Employees', href: '/employees',     accessId: 'employees' },
+      { id: 'emp-new',  label: 'New Employee',  href: '/employees/new', accessId: 'employees' },
     ],
   },
   {
     id: 'contracts',
     label: 'Contracts',
     icon: <FileText className="w-4 h-4" />,
+    accessId: 'contracts',
     children: [
-      { id: 'con-list',  label: 'Contracts',          href: '/contracts' },
-      { id: 'sch-list',  label: 'Working Schedules',  href: '/schedules' },
+      { id: 'con-list', label: 'Contracts',         href: '/contracts',  accessId: 'contracts' },
+      { id: 'sch-list', label: 'Working Schedules', href: '/schedules',  accessId: 'contracts' },
     ],
   },
   {
@@ -50,26 +61,29 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Attendance',
     icon: <CalendarClock className="w-4 h-4" />,
     href: '/attendance',
+    accessId: 'attendance',
   },
   {
     id: 'time-off',
     label: 'Time Off',
     icon: <Umbrella className="w-4 h-4" />,
+    accessId: 'time-off',
     children: [
-      { id: 'tor-list',  label: 'Requests',    href: '/time-off',             badge: 3 },
-      { id: 'tot-list',  label: 'Types',       href: '/time-off/types' },
-      { id: 'la-list',   label: 'Allocations', href: '/time-off/allocations' },
+      { id: 'tor-list', label: 'Requests',    href: '/time-off',             badge: 3, accessId: 'time-off-requests' },
+      { id: 'tot-list', label: 'Types',       href: '/time-off/types',              accessId: 'time-off' },
+      { id: 'la-list',  label: 'Allocations', href: '/time-off/allocations',        accessId: 'time-off' },
     ],
   },
   {
     id: 'payroll',
     label: 'Payroll',
     icon: <Banknote className="w-4 h-4" />,
+    accessId: 'payroll',
     children: [
-      { id: 'pr-list',   label: 'Payruns',             href: '/payroll' },
-      { id: 'ps-list',   label: 'Payslips',            href: '/payroll/payslips' },
-      { id: 'ss-list',   label: 'Salary Structures',   href: '/payroll/salary-structures' },
-      { id: 'sr-list',   label: 'Salary Rules',        href: '/payroll/salary-rules' },
+      { id: 'pr-list', label: 'Payruns',           href: '/payroll',                     accessId: 'payroll-payruns' },
+      { id: 'ps-list', label: 'Payslips',          href: '/payroll/payslips',            accessId: 'payroll-payslips' },
+      { id: 'ss-list', label: 'Salary Structures', href: '/payroll/salary-structures',   accessId: 'payroll' },
+      { id: 'sr-list', label: 'Salary Rules',      href: '/payroll/salary-rules',        accessId: 'payroll' },
     ],
   },
   {
@@ -77,29 +91,33 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Analytics',
     icon: <BarChart3 className="w-4 h-4" />,
     href: '/analytics',
+    accessId: 'analytics',
   },
   {
     id: 'users',
     label: 'User Management',
     icon: <Shield className="w-4 h-4" />,
     href: '/users',
-    adminOnly: true,
+    accessId: 'users',
   },
   {
     id: 'settings',
     label: 'Settings',
     icon: <Settings className="w-4 h-4" />,
     href: '/settings',
+    accessId: 'settings',
   },
 ];
 
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  onMobileClose?: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const { hasNavAccess } = useRole();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(
     new Set(['employees', 'payroll', 'time-off'])
   );
@@ -114,12 +132,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
+  // Filter nav items by role
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (!item.accessId) return true;
+    // For items with children, show if any child or parent accessId matches
+    if (item.children) {
+      return item.children.some((c) => hasNavAccess(c.accessId ?? item.accessId ?? ''));
+    }
+    return hasNavAccess(item.accessId);
+  });
+
   return (
     <aside
       className={`
-        sidebar-transition flex flex-col
-        bg-surface-card dark:bg-slate-900/95 border-r border-surface-border dark:border-slate-800
-        h-full shrink-0
+        sidebar-transition flex flex-col h-full shrink-0
+        bg-[#0f172a] border-r border-slate-800
         ${collapsed ? 'w-[60px]' : 'w-[240px]'}
       `}
     >
@@ -129,10 +156,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           HR
         </div>
         {!collapsed && (
-          <div className="animate-fade-in min-w-0">
+          <div className="animate-fade-in min-w-0 flex-1">
             <p className="text-sm font-bold text-white truncate">PeoplePay360</p>
             <p className="text-[10px] text-slate-500 truncate">HR &amp; Payroll Platform</p>
           </div>
+        )}
+        {/* Mobile close */}
+        {!collapsed && onMobileClose && (
+          <button
+            onClick={onMobileClose}
+            className="p-1 lg:hidden text-slate-500 hover:text-slate-200 rounded transition-colors ml-auto"
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
 
@@ -148,86 +184,80 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5 scrollbar-thin">
-        {NAV_ITEMS.map((item) => {
-          const hasChildren = !!item.children?.length;
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5 scrollbar-thin" aria-label="Main navigation">
+        {visibleItems.map((item) => {
+          const visibleChildren = item.children?.filter((c) =>
+            hasNavAccess(c.accessId ?? item.accessId ?? '')
+          );
+          const hasChildren = !!visibleChildren?.length;
           const isExpanded = expandedItems.has(item.id);
           const isItemActive = item.href
             ? isActive(item.href)
-            : item.children?.some((c) => isActive(c.href)) ?? false;
+            : visibleChildren?.some((c) => isActive(c.href)) ?? false;
 
           return (
             <div key={item.id}>
-              {/* Main nav item */}
               {item.href && !hasChildren ? (
                 <Link
                   href={item.href}
+                  onClick={onMobileClose}
                   className={`
                     flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-150
                     ${isItemActive
                       ? 'bg-brand-600/10 text-brand-400 ring-1 ring-brand-500/20 nav-active-glow'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'}
-                    ${item.adminOnly ? 'opacity-75' : ''}
                   `}
                   title={collapsed ? item.label : undefined}
                 >
                   <span className={`shrink-0 ${isItemActive ? 'text-brand-400' : 'text-slate-500'}`}>
                     {item.icon}
                   </span>
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {item.adminOnly && (
-                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 border border-violet-500/20">
-                          ADMIN
-                        </span>
-                      )}
-                      {item.badge && <DotBadge count={item.badge} />}
-                    </>
-                  )}
+                  {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                  {!collapsed && item.badge && <DotBadge count={item.badge} />}
                 </Link>
               ) : (
-                <button
-                  onClick={() => !collapsed && toggleExpand(item.id)}
-                  className={`
-                    w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-150
-                    ${isItemActive
-                      ? 'text-brand-400'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'}
-                  `}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <span className={`shrink-0 ${isItemActive ? 'text-brand-400' : 'text-slate-500'}`}>
-                    {item.icon}
-                  </span>
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 text-left truncate">{item.label}</span>
-                      <ChevronDown className={`w-3 h-3 text-slate-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                    </>
-                  )}
-                </button>
-              )}
+                <>
+                  <button
+                    onClick={() => !collapsed && toggleExpand(item.id)}
+                    className={`
+                      w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-150
+                      ${isItemActive ? 'text-brand-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'}
+                    `}
+                    title={collapsed ? item.label : undefined}
+                    aria-expanded={isExpanded}
+                  >
+                    <span className={`shrink-0 ${isItemActive ? 'text-brand-400' : 'text-slate-500'}`}>
+                      {item.icon}
+                    </span>
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left truncate">{item.label}</span>
+                        <ChevronDown className={`w-3 h-3 text-slate-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                      </>
+                    )}
+                  </button>
 
-              {/* Children */}
-              {hasChildren && isExpanded && !collapsed && (
-                <div className="ml-3.5 mt-0.5 pl-3 border-l border-slate-800 space-y-0.5 animate-slide-up">
-                  {item.children!.map((child) => (
-                    <Link
-                      key={child.id}
-                      href={child.href}
-                      className={`
-                        flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all duration-150
-                        ${isActive(child.href)
-                          ? 'text-white font-medium bg-brand-600/10 ring-1 ring-brand-500/20'
-                          : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/50 font-normal'}
-                      `}
-                    >
-                      <span>{child.label}</span>
-                      {child.badge && <DotBadge count={child.badge} />}
-                    </Link>
-                  ))}
-                </div>
+                  {hasChildren && isExpanded && !collapsed && (
+                    <div className="ml-3.5 mt-0.5 pl-3 border-l border-slate-800 space-y-0.5 animate-slide-up">
+                      {visibleChildren!.map((child) => (
+                        <Link
+                          key={child.id}
+                          href={child.href}
+                          onClick={onMobileClose}
+                          className={`
+                            flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all duration-150
+                            ${isActive(child.href)
+                              ? 'text-white font-medium bg-brand-600/10 ring-1 ring-brand-500/20'
+                              : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/50 font-normal'}
+                          `}
+                        >
+                          <span>{child.label}</span>
+                          {child.badge && <DotBadge count={child.badge} />}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );

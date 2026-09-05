@@ -1,119 +1,192 @@
 'use client';
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React from 'react';
 import { use } from 'react';
-import { ArrowLeft, Printer, Mail, Download } from 'lucide-react';
-import { Badge } from '../../../../../components/ui/badge';
+import Link from 'next/link';
+import {
+  ArrowLeft, Printer, Send, Download,
+  Building2, User, Calendar, FileText,
+} from 'lucide-react';
+import { StatusBadge } from '../../../../../components/ui/status-badge';
+import { PermissionGate } from '../../../../../components/shared/permission-gate';
 import { Breadcrumbs } from '../../../../../components/layout/breadcrumbs';
-import { MOCK_PAYSLIPS } from '../../../../../lib/mock-data';
+import { MOCK_PAYSLIPS, MOCK_EMPLOYEES } from '../../../../../lib/mock-data';
 import { formatDate, formatCurrency } from '../../../../../lib/utils';
 
 export default function PayslipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [print, setPrint] = useState(false);
   const payslip = MOCK_PAYSLIPS.find((p) => p.id === id) ?? MOCK_PAYSLIPS[0];
+  const employee = MOCK_EMPLOYEES.find((e) => e.id === payslip.employeeId);
 
-  const earnings = payslip.lines.filter((l) => ['basic', 'allowance'].includes(l.category));
-  const deductions = payslip.lines.filter((l) => ['deduction', 'tax'].includes(l.category));
+  const earnings = payslip.lines.filter((l) => l.category === 'basic' || l.category === 'allowance');
+  const deductions = payslip.lines.filter((l) => l.category === 'deduction' || l.category === 'tax');
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-3xl">
+    <div className="space-y-5 animate-fade-in max-w-4xl">
       <Breadcrumbs />
-      <Link href="/payroll/payslips" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-200 transition-colors">
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to Payslips
-      </Link>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{payslip.ref}</h1>
-          <p className="mt-1 text-xs text-slate-400">{payslip.employeeName} · {formatDate(payslip.dateFrom)} – {formatDate(payslip.dateTo)}</p>
-        </div>
+      {/* Back + actions */}
+      <div className="flex items-center justify-between gap-4 flex-wrap no-print">
+        <Link href="/payroll/payslips" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-200 transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Payslips
+        </Link>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors">
-            <Mail className="w-3.5 h-3.5" /> Email
-          </button>
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors">
-            <Printer className="w-3.5 h-3.5" /> Print
+          <PermissionGate allow={['payroll.send_payslip']}>
+            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors">
+              <Send className="w-3.5 h-3.5" /> Send to Employee
+            </button>
+          </PermissionGate>
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            <Printer className="w-3.5 h-3.5" /> Print / PDF
           </button>
         </div>
       </div>
 
-      {/* Payslip Card */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-brand-600/20 via-brand-500/10 to-transparent px-6 py-5 border-b border-slate-800">
-          <div className="flex items-start justify-between">
+      {/* Payslip statement */}
+      <div
+        id="payslip-print-area"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-lg"
+      >
+        {/* Header band */}
+        <div className="bg-gradient-to-r from-brand-700 to-brand-500 px-8 py-6 text-white">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center font-bold text-[10px] text-white">HR</div>
-                <span className="text-sm font-bold text-white">PeoplePay360</span>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-xs font-bold">HR</div>
+                <span className="font-bold text-lg">PeoplePay360</span>
               </div>
-              <h2 className="text-base font-bold text-white">Payslip — {payslip.dateFrom.slice(0, 7)}</h2>
-              <p className="text-xs text-slate-400 mt-0.5">{payslip.ref}</p>
+              <p className="text-sm opacity-80">Payslip Statement</p>
             </div>
-            <Badge status={payslip.status} />
+            <div className="text-right">
+              <p className="text-xs opacity-70 font-mono">{payslip.ref}</p>
+              <p className="text-lg font-bold">{formatCurrency(payslip.netWage)}</p>
+              <p className="text-xs opacity-70">Net Pay</p>
+              <StatusBadge status={payslip.status} />
+            </div>
           </div>
         </div>
 
-        {/* Employee info */}
-        <div className="px-6 py-4 border-b border-slate-800 grid grid-cols-2 gap-y-3 gap-x-8 text-xs">
-          {[
-            { label: 'Employee', value: payslip.employeeName },
-            { label: 'Department', value: payslip.department },
-            { label: 'Job Position', value: payslip.jobPosition },
-            { label: 'Payrun', value: payslip.payrunRef },
-            { label: 'Period', value: `${formatDate(payslip.dateFrom)} – ${formatDate(payslip.dateTo)}` },
-          ].map(({ label, value }) => (
-            <div key={label}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">{label}</span>
-              <span className="text-slate-200">{value}</span>
+        <div className="p-8 space-y-8">
+          {/* Employee + Period info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Employee</p>
+              <div className="space-y-2">
+                {[
+                  { icon: <User className="w-3.5 h-3.5" />, label: 'Name', value: payslip.employeeName },
+                  { icon: <Building2 className="w-3.5 h-3.5" />, label: 'Department', value: payslip.department },
+                  { icon: <FileText className="w-3.5 h-3.5" />, label: 'Position', value: payslip.jobPosition },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-400">{icon}</span>
+                    <span className="text-slate-500 w-20">{label}</span>
+                    <span className="font-medium text-slate-900 dark:text-white">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Pay Period</p>
+              <div className="space-y-2">
+                {[
+                  { icon: <Calendar className="w-3.5 h-3.5" />, label: 'From', value: formatDate(payslip.dateFrom) },
+                  { icon: <Calendar className="w-3.5 h-3.5" />, label: 'To', value: formatDate(payslip.dateTo) },
+                  { icon: <FileText className="w-3.5 h-3.5" />, label: 'Payrun', value: payslip.payrunRef },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-400">{icon}</span>
+                    <span className="text-slate-500 w-20">{label}</span>
+                    <span className="font-medium text-slate-900 dark:text-white">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-        {/* Earnings & Deductions */}
-        <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
           {/* Earnings */}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Earnings</h3>
-            <div className="space-y-2">
-              {earnings.map((line) => (
-                <div key={line.ruleId} className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">{line.ruleName}</span>
-                  <span className="text-slate-200 font-medium">{formatCurrency(line.amount)}</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
-                <span className="font-semibold text-slate-300">Gross Earnings</span>
-                <span className="font-bold text-white">{formatCurrency(payslip.grossWage)}</span>
-              </div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Earnings</p>
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/50">
+                  <tr>
+                    <th className="py-2.5 px-4 text-left font-semibold text-slate-500">Component</th>
+                    <th className="py-2.5 px-4 text-left font-semibold text-slate-500 hidden sm:table-cell">Code</th>
+                    <th className="py-2.5 px-4 text-right font-semibold text-slate-500">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {earnings.map((line) => (
+                    <tr key={line.ruleId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{line.ruleName}</td>
+                      <td className="py-3 px-4 text-slate-400 hidden sm:table-cell font-mono">{line.ruleCode}</td>
+                      <td className="py-3 px-4 text-right font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(line.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-emerald-50 dark:bg-emerald-500/5 border-t-2 border-emerald-100 dark:border-emerald-500/20">
+                  <tr>
+                    <td colSpan={2} className="py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200">Gross Earnings</td>
+                    <td className="py-3 px-4 text-right text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(payslip.grossWage)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
 
           {/* Deductions */}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Deductions</h3>
-            <div className="space-y-2">
-              {deductions.map((line) => (
-                <div key={line.ruleId} className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">{line.ruleName}</span>
-                  <span className="text-rose-400 font-medium">({formatCurrency(Math.abs(line.amount))})</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
-                <span className="font-semibold text-slate-300">Total Deductions</span>
-                <span className="font-bold text-rose-400">({formatCurrency(payslip.totalDeductions)})</span>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Deductions</p>
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/50">
+                  <tr>
+                    <th className="py-2.5 px-4 text-left font-semibold text-slate-500">Component</th>
+                    <th className="py-2.5 px-4 text-left font-semibold text-slate-500 hidden sm:table-cell">Code</th>
+                    <th className="py-2.5 px-4 text-right font-semibold text-slate-500">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {deductions.map((line) => (
+                    <tr key={line.ruleId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{line.ruleName}</td>
+                      <td className="py-3 px-4 text-slate-400 hidden sm:table-cell font-mono">{line.ruleCode}</td>
+                      <td className="py-3 px-4 text-right font-medium text-rose-600 dark:text-rose-400">({formatCurrency(line.amount)})</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-rose-50 dark:bg-rose-500/5 border-t-2 border-rose-100 dark:border-rose-500/20">
+                  <tr>
+                    <td colSpan={2} className="py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200">Total Deductions</td>
+                    <td className="py-3 px-4 text-right text-sm font-bold text-rose-600 dark:text-rose-400">({formatCurrency(payslip.totalDeductions)})</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* Net pay summary */}
+          <div className="bg-gradient-to-r from-brand-600/10 to-emerald-600/10 border border-brand-500/20 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Net Pay</p>
+                <p className="text-xs text-slate-400 mt-0.5">After all deductions</p>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatCurrency(payslip.netWage)}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {formatDate(payslip.dateFrom)} – {formatDate(payslip.dateTo)}
+                </p>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Net pay */}
-        <div className="px-6 py-4 bg-gradient-to-r from-emerald-500/10 to-transparent border-t border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-300">Net Pay</span>
-            <span className="text-2xl font-bold text-emerald-400">{formatCurrency(payslip.netWage)}</span>
-          </div>
+          {/* Footer note */}
+          <p className="text-[10px] text-slate-400 text-center">
+            This is a computer-generated payslip. No signature is required. — PeoplePay360 HR Platform
+          </p>
         </div>
       </div>
     </div>
