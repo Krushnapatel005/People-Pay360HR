@@ -6,8 +6,9 @@ const navItems = ['Overview', 'Employees', 'Contracts', 'Attendance', 'Time Off'
 
 export function DashboardShell() {
   const [dark, setDark] = useState(false);
-  useEffect(() => document.documentElement.classList.toggle('dark', dark), [dark]);
-
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+  }, [dark]);
   return (
     <main className="min-h-screen p-4 md:p-8">
       <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-[220px_1fr]">

@@ -2,8 +2,133 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
-.dark { color-scheme: dark; }
-* { box-sizing: border-box; }
-body { margin: 0; min-height: 100vh; background: #f8fafc; color: #14213d; font-family: Arial, Helvetica, sans-serif; }
-.dark body { background: #0b1220; color: #e6edf8; }
+/* ── Google Fonts: Inter ──────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ── CSS Variables (Light / Dark) ────────────────────────────── */
+:root {
+  color-scheme: light;
+  --font-inter: 'Inter', system-ui, sans-serif;
+
+  /* Light surface */
+  --bg-base:    #f1f5f9;
+  --bg-card:    #ffffff;
+  --bg-header:  #f8fafc;
+  --border:     #e2e8f0;
+  --text-1:     #0f172a;
+  --text-2:     #475569;
+  --text-3:     #94a3b8;
+  --brand:      #4f46e5;
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Dark surface — from Stitch */
+  --bg-base:    #090d16;
+  --bg-card:    #131d31;
+  --bg-header:  #17233b;
+  --border:     #1f2e4d;
+  --text-1:     #f1f5f9;
+  --text-2:     #94a3b8;
+  --text-3:     #475569;
+  --brand:      #6366f1;
+}
+
+/* ── Base Reset ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font-inter);
+  background-color: var(--bg-base);
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Custom Scrollbar (Stitch-style) ─────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+.light ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+/* ── Selection ────────────────────────────────────────────────── */
+::selection { background: #4f46e5; color: white; }
+
+/* ── Auth background radial gradients (Stitch) ───────────────── */
+.auth-bg {
+  background-color: #0b1120;
+  background-image:
+    radial-gradient(at 0% 0%,   rgba(37, 99, 235, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Light auth bg */
+.light .auth-bg {
+  background-color: #f1f5f9;
+  background-image:
+    radial-gradient(at 0% 0%,   rgba(79, 70, 229, 0.06) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.04) 0px, transparent 50%);
+}
+
+/* ── Auth Card Shadow ─────────────────────────────────────────── */
+.auth-card-shadow {
+  box-shadow: 0 20px 45px -15px rgba(0,0,0,0.7), 0 0 1px 1px rgba(255,255,255,0.05);
+}
+.light .auth-card-shadow {
+  box-shadow: 0 4px 24px -4px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+/* ── Input transition ─────────────────────────────────────────── */
+.input-transition { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+
+/* ── Sidebar transition ───────────────────────────────────────── */
+.sidebar-transition { transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+
+/* ── Glass card ───────────────────────────────────────────────── */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Nav item active glow ─────────────────────────────────────── */
+.nav-active-glow {
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 2px 8px rgba(99,102,241,0.15);
+}
+
+/* ── Animate utilities ────────────────────────────────────────── */
+@layer utilities {
+  .animate-fade-in  { animation: fadeIn  0.2s ease-out both; }
+  .animate-slide-in { animation: slideIn 0.25s ease-out both; }
+  .animate-slide-up { animation: slideUp 0.2s ease-out both; }
+  .animate-scale-in { animation: scaleIn 0.15s ease-out both; }
+}
+
+@keyframes fadeIn  { from { opacity:0 }                         to { opacity:1 } }
+@keyframes slideIn { from { opacity:0; transform:translateX(-8px) } to { opacity:1; transform:translateX(0) } }
+@keyframes slideUp { from { opacity:0; transform:translateY(8px)  } to { opacity:1; transform:translateY(0) } }
+@keyframes scaleIn { from { opacity:0; transform:scale(0.95) }      to { opacity:1; transform:scale(1) } }
+
+/* ── Stat card shimmer ────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
+
+/* ── Print styles (payslips) ──────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; color: black; }
+  .dark { background: white; color: black; }
+}
