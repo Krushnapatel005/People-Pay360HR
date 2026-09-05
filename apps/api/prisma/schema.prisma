@@ -1,11 +1,37 @@
-generator client { provider = "prisma-client-js" }
+generator client {
+  provider = "prisma-client-js"
+}
 
-datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-enum UserStatus { INVITED ACTIVE INACTIVE }
-enum EmploymentStatus { ACTIVE ON_LEAVE INACTIVE TERMINATED }
-enum ContractStatus { DRAFT ACTIVE ENDED CANCELLED }
-enum ScheduleType { FIXED FLEXIBLE SHIFT }
+enum UserStatus {
+  INVITED
+  ACTIVE
+  INACTIVE
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+  TERMINATED
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum ScheduleType {
+  FIXED
+  FLEXIBLE
+  SHIFT
+}
 
 model User {
   id           String   @id @default(cuid())
