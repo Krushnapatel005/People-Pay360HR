@@ -12,14 +12,21 @@ This is the initial monorepo scaffold for the PeoplePay360 HR and payroll platfo
 
 ## Start locally
 
-1. Copy `.env.example` to `.env` and replace local secrets.
+1. Copy `.env.example` to `.env` in `apps/api` and replace local secrets.
 2. Install workspace packages with `pnpm install`.
-3. Start PostgreSQL with `docker compose up -d postgres`.
-4. Create the database schema with `pnpm --filter @peoplepay360/api prisma:migrate`.
+3. Ensure MongoDB is running locally (default: `mongodb://localhost:27017`).
+4. Run the seed script: `pnpm --filter @peoplepay360/api seed`.
 5. Start both applications with `pnpm dev`.
 
 The web app runs on `http://localhost:3000`; the API health check runs at `http://localhost:4000/api/health`.
 
-## Level 1 boundary
+## Demo Credentials (Local Only)
 
-This foundation intentionally does not implement login, payroll calculations, or full CRUD yet. It establishes the project structure and the core data relationships required before those modules are built.
+| Role | Demo Name | Email | Password |
+|---|---|---|---|
+| Employee | Aarav Mehta | employee@peoplepay360.local | Employee@123 |
+| HR Manager | Maya Shah | hr.manager@peoplepay360.local | HRManager@123 |
+| Time Off Admin | Rohan Patel | timeoff.admin@peoplepay360.local | TimeOff@123 |
+| HR Payroll User | Kavya Rao | payroll.user@peoplepay360.local | PayrollUser@123 |
+| HR Payroll Admin| Nisha Verma | payroll.admin@peoplepay360.local | PayrollAdmin@123 |
+| Admin | System Admin | admin@peoplepay360.local | Admin@123 |

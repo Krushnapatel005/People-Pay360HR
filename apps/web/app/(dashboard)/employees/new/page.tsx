@@ -9,6 +9,8 @@ import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
 import { ConfirmDialog } from '../../../../components/shared/confirm-dialog';
 import { useUnsavedChanges } from '../../../../hooks/use-unsaved-changes';
 import { useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { employeesApi } from '../../../../lib/employees-api';
 
 // ─── Validation Schema ────────────────────────────────────────────────────────
 const schema = z.object({
@@ -70,17 +72,27 @@ export default function NewEmployeePage() {
 
   const { showConfirm, guardAction, confirmLeave, cancelLeave } = useUnsavedChanges(isDirty && !submitted);
 
-  function onSubmit(data: FormValues) {
-    // Simulate save
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        console.log('Employee data:', data);
-        setSubmitted(true);
-        setTimeout(() => router.push('/employees'), 500);
-        resolve();
-      }, 800);
-    });
-  }
+  const queryClient = useQueryClient();
+  const createMutation = useMutation({
+    mutationFn: (data: FormValues) => employeesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSubmitted(true);
+      setTimeout(() => router.push('/employees'), 1500);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Failed to create employee');
+    }
+  });
+
+  const onSubmit = (data: FormValues) => {
+    // Convert hireDate string to ISO string for backend
+    const payload = {
+      ...data,
+      hireDate: new Date(data.hireDate).toISOString(),
+    };
+    createMutation.mutate(payload);
+  };
 
   if (submitted) {
     return (

@@ -1,12 +1,30 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Eye, EyeOff, Mail, Lock, Users } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Users, Loader2 } from 'lucide-react';
+import { useAuth } from '../../../lib/context/auth-context';
 
 export default function LoginPage() {
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      await login(email, password);
+      // AuthContext.login() will redirect to /dashboard on success
+    } catch (err: any) {
+      setError(err?.message ?? 'Invalid email or password. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-md mx-auto animate-scale-in">
@@ -37,13 +55,14 @@ export default function LoginPage() {
               <p className="mt-1 text-sm text-slate-400">Sign in to continue to your workspace.</p>
             </div>
 
-            <form
-              className="space-y-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                window.location.href = '/dashboard';
-              }}
-            >
+            {/* Error Banner */}
+            {error && (
+              <div className="mb-5 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+
+            <form className="space-y-5" onSubmit={handleSubmit}>
               {/* Email */}
               <div>
                 <label className="block text-xs font-medium uppercase tracking-wider text-slate-300 mb-2" htmlFor="work-email">
@@ -108,9 +127,11 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   id="login-submit-btn"
-                  className="w-full flex items-center justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 active:bg-brand-700 transition-all duration-150 shadow-lg shadow-brand-600/25 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 focus:ring-offset-surface-card cursor-pointer"
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 shadow-lg shadow-brand-600/25 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 focus:ring-offset-surface-card cursor-pointer"
                 >
-                  Sign In
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isLoading ? 'Signing in…' : 'Sign In'}
                 </button>
               </div>
             </form>

@@ -92,7 +92,7 @@ export default function PayrunsPage() {
         </div>
         <PermissionGate allow={['payroll.compute']}>
           <Link
-            href="/payroll/new"
+            href="/payroll/payruns/new"
             className="inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-brand-sm transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -183,7 +183,7 @@ export default function PayrunsPage() {
                   <td className="py-3.5 px-4 hidden sm:table-cell">
                     <LifecycleBar status={pr.status} />
                   </td>
-                  <td className="py-3.5 px-4 text-slate-400 hidden md:table-cell">{pr.employees.length || '—'}</td>
+                  <td className="py-3.5 px-4 text-slate-400 hidden md:table-cell">{(pr.employees?.length ?? (pr as any).payslips?.length) || '—'}</td>
                   <td className="py-3.5 px-4 text-slate-400 hidden lg:table-cell">{pr.totalGross > 0 ? formatCurrency(pr.totalGross) : '—'}</td>
                   <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">{pr.totalNet > 0 ? formatCurrency(pr.totalNet) : '—'}</td>
                   <td className="py-3.5 px-4"><StatusBadge status={pr.status} /></td>

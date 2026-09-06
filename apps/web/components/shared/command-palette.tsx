@@ -6,7 +6,8 @@ import {
   Umbrella, Banknote, BarChart3, Settings, ArrowRight,
   User, CalendarClock,
 } from 'lucide-react';
-import { MOCK_EMPLOYEES } from '../../lib/mock-data';
+import { employeesApi } from '../../lib/employees-api';
+import { useQuery } from '@tanstack/react-query';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -32,6 +33,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: employeesApi.getAll,
+    enabled: open,
+  });
+
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -44,12 +51,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     l.label.toLowerCase().includes(query.toLowerCase())
   );
 
-  const filteredEmployees = MOCK_EMPLOYEES.filter(
-    (e) =>
-      query.length > 1 &&
-      (e.fullName.toLowerCase().includes(query.toLowerCase()) ||
-        e.workEmail.toLowerCase().includes(query.toLowerCase()) ||
-        e.department.toLowerCase().includes(query.toLowerCase()))
+  const filteredEmployees = employees.filter(
+    (e: any) => {
+      const fullName = `${e.firstName} ${e.lastName}`;
+      return query.length > 1 &&
+      (fullName.toLowerCase().includes(query.toLowerCase()) ||
+        e.workEmail?.toLowerCase().includes(query.toLowerCase()) ||
+        e.department?.name?.toLowerCase().includes(query.toLowerCase()))
+    }
   );
 
   const navigate = (href: string) => {
@@ -83,22 +92,25 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           {filteredEmployees.length > 0 && (
             <div className="py-2">
               <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Employees</p>
-              {filteredEmployees.map((emp) => (
+              {filteredEmployees.map((emp: any) => {
+                const fullName = `${emp.firstName} ${emp.lastName}`;
+                const initials = fullName.substring(0, 2).toUpperCase();
+                return (
                 <button
                   key={emp.id}
                   onClick={() => navigate(`/employees/${emp.id}`)}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors text-left"
                 >
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500/30 to-brand-600/30 border border-brand-500/20 flex items-center justify-center text-xs text-brand-300 font-bold shrink-0">
-                    {emp.initials}
+                    {initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{emp.fullName}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{emp.department} · {emp.jobPosition}</p>
+                    <p className="text-xs font-medium truncate">{fullName}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{emp.department?.name || 'No Dept'} · {emp.jobPosition}</p>
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-600 ml-auto shrink-0" />
                 </button>
-              ))}
+              )})}
             </div>
           )}
 

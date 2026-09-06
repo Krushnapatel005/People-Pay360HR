@@ -1,4 +1,5 @@
 'use client';
+
 import React from 'react';
 import {
   Users, FileText, CalendarClock, Umbrella, Banknote, AlertTriangle,
@@ -6,13 +7,14 @@ import {
   TrendingUp, Activity,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { Breadcrumbs } from '../../../components/layout/breadcrumbs';
 import { StatusBadge } from '../../../components/ui/status-badge';
 import { DashboardWidget, WidgetGrid } from '../../../components/dashboard/widget';
+import { PermissionGate } from '../../../components/shared/permission-gate';
 import { useRole } from '../../../lib/context/role-context';
-import {
-  MOCK_EMPLOYEES, MOCK_TIME_OFF_REQUESTS, MOCK_PAYRUNS, MOCK_CONTRACTS,
-} from '../../../lib/mock-data';
+import { useAuth } from '../../../lib/context/auth-context';
+import { dashboardApi } from '../../../lib/api/dashboard';
 import { formatCurrency, formatDate } from '../../../lib/utils';
 import type { Role } from '../../../lib/types';
 
@@ -120,13 +122,69 @@ function PayrunLifecycle({ status }: { status: string }) {
 
 export default function DashboardPage() {
   const { role } = useRole();
-  const config = ROLE_WIDGETS[role];
+  const { user } = useAuth();
+  const userId = user?.id ?? 'anon';
 
-  const recentEmployees = MOCK_EMPLOYEES.slice(0, 5);
-  const pendingRequests = MOCK_TIME_OFF_REQUESTS.filter((r) => r.status === 'pending').slice(0, 4);
-  const latestPayrun = MOCK_PAYRUNS.find((p) => p.status === 'paid' || p.status === 'validated');
-  const draftPayrun = MOCK_PAYRUNS.find((p) => p.status === 'draft');
-  const expiringContracts = MOCK_CONTRACTS.filter((c) => c.status === 'active').slice(0, 3);
+  // Query keys are scoped by userId to prevent cached data from one user
+  // being displayed to a different user after logout/login switching.
+  const { data: empKpis } = useQuery({ queryKey: ['dashboard', 'empKpis', userId], queryFn: dashboardApi.getMyKpis, enabled: role === 'employee' && !!user });
+  const { data: hrKpis } = useQuery({ queryKey: ['dashboard', 'hrKpis', userId], queryFn: dashboardApi.getHrKpis, enabled: ['hr_manager', 'admin'].includes(role) && !!user });
+  const { data: toKpis } = useQuery({ queryKey: ['dashboard', 'timeOffKpis', userId], queryFn: dashboardApi.getTimeOffKpis, enabled: role === 'time_off_admin' && !!user });
+  const { data: prKpis } = useQuery({ queryKey: ['dashboard', 'payrollKpis', userId], queryFn: dashboardApi.getPayrollKpis, enabled: ['payroll_user', 'payroll_admin', 'admin'].includes(role) && !!user });
+
+  const getDynamicWidgets = (r: Role) => {
+    const base = ROLE_WIDGETS[r];
+    const widgets = [...base.widgets];
+    
+    if (r === 'employee' && empKpis) {
+      widgets[0] = { ...widgets[0], value: `${empKpis.totalRemaining} days`, delta: `${empKpis.totalTaken} days used` };
+      widgets[1] = { ...widgets[1], value: `${empKpis.attendanceRate.toFixed(1)}%` };
+      widgets[2] = { ...widgets[2], value: empKpis.pendingTimeOff.toString(), delta: `${empKpis.pendingTimeOff} awaiting approval` };
+      widgets[3] = { ...widgets[3], value: formatCurrency(empKpis.lastNetSalary), delta: empKpis.lastPayslipPeriod ? `For ${formatDate(empKpis.lastPayslipPeriod)}` : 'No recent payslip' };
+    }
+    
+    if (['hr_manager', 'admin'].includes(r) && hrKpis) {
+      if (r === 'admin') {
+        widgets[0] = { ...widgets[0], value: hrKpis.totalEmployees.toString() };
+        widgets[2] = { ...widgets[2], value: hrKpis.pendingLeaveRequests.toString() };
+      } else {
+        widgets[0] = { ...widgets[0], value: hrKpis.totalEmployees.toString() };
+        widgets[1] = { ...widgets[1], value: hrKpis.pendingLeaveRequests.toString() };
+        widgets[2] = { ...widgets[2], value: hrKpis.expiringContracts.toString() };
+        widgets[3] = { ...widgets[3], value: `${hrKpis.attendanceRate.toFixed(1)}%` };
+      }
+    }
+
+    if (r === 'time_off_admin' && toKpis) {
+      widgets[0] = { ...widgets[0], value: toKpis.pendingRequests.toString() };
+      widgets[1] = { ...widgets[1], value: toKpis.approvedThisMonth.toString() };
+      widgets[2] = { ...widgets[2], value: toKpis.leaveTypesActive.toString() };
+      widgets[3] = { ...widgets[3], value: toKpis.totalDaysAllocated.toString() };
+    }
+
+    if (['payroll_user', 'payroll_admin', 'admin'].includes(r) && prKpis) {
+      if (r === 'payroll_admin' || r === 'admin') {
+         // Modify specifically for admin/payroll_admin
+      } else {
+        widgets[0] = { ...widgets[0], value: prKpis.activePayruns.toString() };
+        widgets[1] = { ...widgets[1], value: formatCurrency(prKpis.lastPayrunNet) };
+        widgets[2] = { ...widgets[2], value: prKpis.payslipsGenerated.toString() };
+        widgets[3] = { ...widgets[3], value: prKpis.exceptionsFound.toString() };
+      }
+    }
+
+    return { ...base, widgets };
+  };
+
+  const config = getDynamicWidgets(role);
+
+  // We are currently mocking the detailed lists since the detailed list API hasn't been written for the dashboard yet, but the KPIs are live!
+  const recentEmployees: any[] = []; 
+  const pendingRequests: any[] = []; 
+  const latestPayrun: any = null; 
+  const draftPayrun: any = null; 
+  const expiringContracts: any[] = []; 
+
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -209,7 +267,7 @@ export default function DashboardPage() {
         )}
 
         {/* Payrun widgets — visible to payroll roles and admin */}
-        {(['payroll_user', 'payroll_admin', 'admin'] as Role[]).includes(role) && (
+        <PermissionGate roles={['payroll_user', 'payroll_admin', 'admin']}>
           <div className="lg:col-span-2 bg-surface-card dark:bg-slate-900/80 border border-surface-border dark:border-slate-800 rounded-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -269,7 +327,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        )}
+        </PermissionGate>
 
         {/* Time Off Admin main view */}
         {role === 'time_off_admin' && (

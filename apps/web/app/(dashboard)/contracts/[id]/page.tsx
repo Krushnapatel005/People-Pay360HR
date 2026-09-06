@@ -5,12 +5,20 @@ import { use } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Badge } from '../../../../components/ui/badge';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
-import { MOCK_CONTRACTS } from '../../../../lib/mock-data';
 import { formatDate, formatCurrency, capitalize } from '../../../../lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { contractsApi } from '../../../../lib/contracts-api';
 
 export default function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const contract = MOCK_CONTRACTS.find((c) => c.id === id) ?? MOCK_CONTRACTS[0];
+
+  const { data: contract, isLoading } = useQuery({
+    queryKey: ['contract', id],
+    queryFn: () => contractsApi.getById(id),
+  });
+
+  if (isLoading) return <div className="py-16 text-center text-slate-400 text-sm">Loading contract...</div>;
+  if (!contract) return <div className="py-16 text-center text-rose-400 text-sm">Contract not found</div>;
 
   return (
     <div className="space-y-5 animate-fade-in max-w-3xl">

@@ -1,17 +1,21 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '../layout/sidebar';
 import { Topbar } from '../layout/topbar';
 import { CommandPalette } from '../shared/command-palette';
 import { NotificationsPanel } from '../shared/notifications-panel';
 import { RoleBanner } from '../shared/role-banner';
 import { RoleProvider } from '../../lib/context/role-context';
+import { useAuth } from '../../lib/context/auth-context';
 
 interface AppShellProps {
   children: React.ReactNode;
 }
 
 function AppShellInner({ children }: AppShellProps) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -49,7 +53,32 @@ function AppShellInner({ children }: AppShellProps) {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  // Auth guard: redirect to /login if session has expired or user is not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+
+  // Show a loading screen while the session is being restored from the server cookie
+  // This prevents the dashboard from briefly rendering with wrong or no user data
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--bg-base)]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center animate-pulse">
+            <span className="text-white font-bold text-sm">P</span>
+          </div>
+          <p className="text-sm text-slate-500 animate-pulse">Loading your workspace…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render nothing while redirect is in progress
+  if (!isAuthenticated) return null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--bg-base)]">
@@ -93,7 +122,7 @@ function AppShellInner({ children }: AppShellProps) {
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
       <NotificationsPanel open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
 
-      {/* Dev-mode role banner */}
+      {/* Role banner */}
       <RoleBanner />
     </div>
   );

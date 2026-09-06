@@ -6,8 +6,9 @@ import { ArrowLeft, Users, AlertTriangle, CheckCircle, Banknote } from 'lucide-r
 import { Badge } from '../../../../components/ui/badge';
 import { Tabs } from '../../../../components/ui/tabs';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
-import { MOCK_PAYRUNS } from '../../../../lib/mock-data';
 import { formatDate, formatCurrency } from '../../../../lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { payrollApi } from '../../../../lib/payroll-api';
 
 const DETAIL_TABS = [
   { id: 'summary',    label: 'Summary' },
@@ -18,8 +19,16 @@ const DETAIL_TABS = [
 export default function PayrunDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [activeTab, setActiveTab] = useState('summary');
-  const payrun = MOCK_PAYRUNS.find((p) => p.id === id) ?? MOCK_PAYRUNS[0];
-  const exceptions = payrun.employees.filter((e) => e.status !== 'ok');
+  
+  const { data: payrun, isLoading } = useQuery({
+    queryKey: ['payrun', id],
+    queryFn: () => payrollApi.getPayrunById(id),
+  });
+
+  const exceptions = payrun?.employees?.filter((e: any) => e.status !== 'ok') || [];
+
+  if (isLoading) return <div className="py-16 text-center text-slate-400 text-sm">Loading payrun details...</div>;
+  if (!payrun) return <div className="py-16 text-center text-rose-400 text-sm">Payrun not found</div>;
 
   return (
     <div className="space-y-5 animate-fade-in max-w-5xl">
@@ -99,7 +108,7 @@ export default function PayrunDetailPage({ params }: { params: Promise<{ id: str
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
-                    {payrun.employees.map((emp) => (
+                    {payrun.employees.map((emp: any) => (
                       <tr key={emp.employeeId} className="hover:bg-slate-800/30 transition-colors">
                         <td className="py-3 px-2 font-medium text-white">{emp.employeeName}</td>
                         <td className="py-3 px-2 text-slate-500 hidden md:table-cell">{emp.department}</td>
@@ -128,7 +137,7 @@ export default function PayrunDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {exceptions.map((e) => (
+                  {exceptions.map((e: any) => (
                     <div key={e.employeeId} className="flex items-start gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
                       <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <div>

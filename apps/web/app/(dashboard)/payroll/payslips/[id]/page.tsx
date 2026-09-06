@@ -9,16 +9,23 @@ import {
 import { StatusBadge } from '../../../../../components/ui/status-badge';
 import { PermissionGate } from '../../../../../components/shared/permission-gate';
 import { Breadcrumbs } from '../../../../../components/layout/breadcrumbs';
-import { MOCK_PAYSLIPS, MOCK_EMPLOYEES } from '../../../../../lib/mock-data';
 import { formatDate, formatCurrency } from '../../../../../lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { payrollApi } from '../../../../../lib/payroll-api';
 
 export default function PayslipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const payslip = MOCK_PAYSLIPS.find((p) => p.id === id) ?? MOCK_PAYSLIPS[0];
-  const employee = MOCK_EMPLOYEES.find((e) => e.id === payslip.employeeId);
 
-  const earnings = payslip.lines.filter((l) => l.category === 'basic' || l.category === 'allowance');
-  const deductions = payslip.lines.filter((l) => l.category === 'deduction' || l.category === 'tax');
+  const { data: payslip, isLoading } = useQuery({
+    queryKey: ['payslip', id],
+    queryFn: () => payrollApi.getPayslipById(id),
+  });
+
+  if (isLoading) return <div className="py-16 text-center text-slate-400 text-sm">Loading payslip details...</div>;
+  if (!payslip) return <div className="py-16 text-center text-rose-400 text-sm">Payslip not found</div>;
+
+  const earnings = payslip.lines?.filter((l: any) => l.category === 'BASIC_SALARY' || l.category === 'ALLOWANCE') || [];
+  const deductions = payslip.lines?.filter((l: any) => l.category === 'DEDUCTION') || [];
 
   return (
     <div className="space-y-5 animate-fade-in max-w-4xl">
@@ -31,7 +38,27 @@ export default function PayslipDetailPage({ params }: { params: Promise<{ id: st
         </Link>
         <div className="flex items-center gap-2">
           <PermissionGate allow={['payroll.send_payslip']}>
-            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors">
+            <button
+              onClick={() => {
+                if (payslip?.status === 'PAID') {
+                  const btn = document.getElementById('send-btn');
+                  if (btn) btn.textContent = 'Sending...';
+                  payrollApi.sendPayslipEmail(id as string)
+                    .then(() => {
+                      if (btn) btn.textContent = 'Sent!';
+                      setTimeout(() => { if (btn) btn.textContent = 'Send to Employee'; }, 2000);
+                    })
+                    .catch(() => {
+                      if (btn) btn.textContent = 'Error';
+                      setTimeout(() => { if (btn) btn.textContent = 'Send to Employee'; }, 2000);
+                    });
+                } else {
+                  alert('Only PAID payslips can be sent.');
+                }
+              }}
+              id="send-btn"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors"
+            >
               <Send className="w-3.5 h-3.5" /> Send to Employee
             </button>
           </PermissionGate>
@@ -118,7 +145,7 @@ export default function PayslipDetailPage({ params }: { params: Promise<{ id: st
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {earnings.map((line) => (
+                  {earnings.map((line: any) => (
                     <tr key={line.ruleId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{line.ruleName}</td>
                       <td className="py-3 px-4 text-slate-400 hidden sm:table-cell font-mono">{line.ruleCode}</td>
@@ -149,7 +176,7 @@ export default function PayslipDetailPage({ params }: { params: Promise<{ id: st
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {deductions.map((line) => (
+                  {deductions.map((line: any) => (
                     <tr key={line.ruleId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{line.ruleName}</td>
                       <td className="py-3 px-4 text-slate-400 hidden sm:table-cell font-mono">{line.ruleCode}</td>

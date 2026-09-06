@@ -6,7 +6,8 @@ import { StatusBadge } from '../../../components/ui/status-badge';
 import { PageGate } from '../../../components/shared/permission-gate';
 import { ConfirmDialog } from '../../../components/shared/confirm-dialog';
 import { EmptyState } from '../../../components/shared/empty-state';
-import { MOCK_USERS } from '../../../lib/mock-data';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usersApi } from '../../../lib/users-api';
 import { formatDate } from '../../../lib/utils';
 import { ROLE_LABELS, ROLE_COLORS, ROLE_BG } from '../../../lib/context/role-context';
 import type { User, Role } from '../../../lib/types';
@@ -14,27 +15,38 @@ import type { User, Role } from '../../../lib/types';
 const ALL_ROLES: Role[] = ['employee', 'hr_manager', 'time_off_admin', 'payroll_user', 'payroll_admin', 'admin'];
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
-  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
-  const filtered = users.filter((u) => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersApi.getAll,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => usersApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setDeleteTarget(null);
+    },
+  });
+
+  const filtered = users.filter((u: any) => {
+    // We assume backend returns u.employee with name, or fallback to email
+    const nameStr = u.employee ? `${u.employee.firstName} ${u.employee.lastName}` : u.email;
+    const matchSearch = nameStr.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
+    // Get primary role from roles array
+    const primaryRole = u.roles?.[0]?.role?.name;
+    const matchRole = roleFilter === 'all' || primaryRole === roleFilter;
     return matchSearch && matchRole;
   });
 
   function handleDelete() {
     if (!deleteTarget) return;
-    setLoading(true);
-    setTimeout(() => {
-      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
-      setLoading(false);
-      setDeleteTarget(null);
-    }, 600);
+    deleteMutation.mutate(deleteTarget.id);
   }
 
   return (
@@ -59,7 +71,7 @@ export default function UsersPage() {
         {/* Role summary chips */}
         <div className="flex flex-wrap gap-2">
           {ALL_ROLES.map((r) => {
-            const count = users.filter((u) => u.role === r).length;
+            const count = users.filter((u: any) => (u.roles?.[0]?.role?.name || 'employee') === r).length;
             return (
               <button
                 key={r}
@@ -103,21 +115,25 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border dark:divide-slate-800/80">
-                {filtered.map((user) => (
+                {filtered.map((user: any) => {
+                  const roleName = (user.roles?.[0]?.role?.name || 'employee') as Role;
+                  const nameStr = user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user.email;
+                  const initials = nameStr.substring(0, 2).toUpperCase();
+                  return (
                   <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${ROLE_BG[user.role]} ${ROLE_COLORS[user.role]}`}>
-                          {user.initials}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${ROLE_BG[roleName]} ${ROLE_COLORS[roleName]}`}>
+                          {initials}
                         </div>
-                        <p className="font-medium text-slate-900 dark:text-white">{user.name}</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{nameStr}</p>
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-slate-400 hidden sm:table-cell">{user.email}</td>
                     <td className="py-3.5 px-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${ROLE_BG[user.role]} ${ROLE_COLORS[user.role]}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${ROLE_COLORS[user.role].replace('text-', 'bg-')}`} />
-                        {ROLE_LABELS[user.role]}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${ROLE_BG[roleName]} ${ROLE_COLORS[roleName]}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${ROLE_COLORS[roleName]?.replace('text-', 'bg-') || 'bg-slate-400'}`} />
+                        {ROLE_LABELS[roleName] || roleName}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-400 hidden md:table-cell">
@@ -139,7 +155,7 @@ export default function UsersPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
@@ -147,13 +163,13 @@ export default function UsersPage() {
 
         <ConfirmDialog
           open={!!deleteTarget}
-          onClose={() => !loading && setDeleteTarget(null)}
+          onClose={() => !deleteMutation.isPending && setDeleteTarget(null)}
           onConfirm={handleDelete}
-          title={`Remove ${deleteTarget?.name}?`}
+          title={`Remove ${deleteTarget?.email || 'User'}?`}
           description="This will revoke their system access. This action cannot be undone."
           confirmLabel="Remove User"
           variant="danger"
-          loading={loading}
+          loading={deleteMutation.isPending}
         />
       </div>
     </PageGate>

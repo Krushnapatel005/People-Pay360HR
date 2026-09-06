@@ -34,91 +34,301 @@ enum ScheduleType {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String?
-  status       UserStatus @default(INVITED)
-  employeeId   String?  @unique
-  employee     Employee? @relation(fields: [employeeId], references: [id])
-  roles        UserRole[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String     @id @default(cuid())
+  email            String     @unique
+  passwordHash     String?
+  refreshTokenHash String?
+  lastLogin        DateTime?
+  status           UserStatus @default(INVITED)
+  employeeId       String?    @unique
+  employee         Employee?  @relation(fields: [employeeId], references: [id])
+  roles            UserRole[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 }
 
 model Role {
-  id          String @id @default(cuid())
-  code        String @unique
+  id          String           @id @default(cuid())
+  code        String           @unique
   name        String
   users       UserRole[]
   permissions RolePermission[]
 }
 
 model Permission {
-  id    String @id @default(cuid())
-  code  String @unique
+  id    String           @id @default(cuid())
+  code  String           @unique
   roles RolePermission[]
 }
 
 model UserRole {
   userId String
   roleId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
   @@id([userId, roleId])
 }
 
 model RolePermission {
   roleId       String
   permissionId String
-  role         Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
   @@id([roleId, permissionId])
 }
 
 model Employee {
-  id               String @id @default(cuid())
-  employeeNumber   String @unique
+  id               String            @id @default(cuid())
+  employeeNumber   String            @unique
   firstName        String
   lastName         String
-  workEmail        String @unique
+  workEmail        String            @unique
   jobTitle         String?
   department       String?
-  employmentStatus EmploymentStatus @default(ACTIVE)
+  employmentStatus EmploymentStatus  @default(ACTIVE)
   startDate        DateTime
   user             User?
   contracts        Contract[]
   scheduleId       String?
-  schedule         WorkingSchedule? @relation(fields: [scheduleId], references: [id])
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  schedule         WorkingSchedule?  @relation(fields: [scheduleId], references: [id])
+  attendance       Attendance[]
+  leaveAllocations LeaveAllocation[]
+  timeOffRequests  TimeOffRequest[]
+  payslips         Payslip[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model Contract {
-  id          String @id @default(cuid())
-  employeeId  String
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  reference   String @unique
-  startDate   DateTime
-  endDate     DateTime?
-  status      ContractStatus @default(DRAFT)
-  wageAmount  Decimal @db.Decimal(14,2)
-  currency    String @default("INR")
-  scheduleId  String?
-  schedule    WorkingSchedule? @relation(fields: [scheduleId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String           @id @default(cuid())
+  employeeId        String
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  reference         String           @unique
+  startDate         DateTime
+  endDate           DateTime?
+  status            ContractStatus   @default(DRAFT)
+  wageAmount        Decimal          @db.Decimal(14, 2)
+  currency          String           @default("INR")
+  scheduleId        String?
+  schedule          WorkingSchedule? @relation(fields: [scheduleId], references: [id])
+  salaryStructureId String?
+  salaryStructure   SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
+  payslips          Payslip[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
   @@index([employeeId, startDate, endDate])
 }
 
 model WorkingSchedule {
-  id          String @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
   type        ScheduleType @default(FIXED)
-  weeklyHours Decimal @db.Decimal(5,2)
-  timezone    String @default("Asia/Kolkata")
-  isActive    Boolean @default(true)
+  weeklyHours Decimal      @db.Decimal(5, 2)
+  timezone    String       @default("Asia/Kolkata")
+  isActive    Boolean      @default(true)
+  days        WorkingDay[]
   employees   Employee[]
   contracts   Contract[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model WorkingDay {
+  id                String          @id @default(cuid())
+  workingScheduleId String
+  workingSchedule   WorkingSchedule @relation(fields: [workingScheduleId], references: [id], onDelete: Cascade)
+  dayOfWeek         Int             // 0=Sunday, 1=Monday...
+  startTime         String          // e.g., "09:00"
+  endTime           String          // e.g., "18:00"
+  breakMinutes      Int             @default(60)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([workingScheduleId, dayOfWeek])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TimeOffUnit {
+  DAYS
+  HOURS
+}
+
+model Attendance {
+  id         String           @id @default(cuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  checkIn    DateTime?
+  checkOut   DateTime?
+  workedHours Decimal?        @db.Decimal(5, 2)
+  status     AttendanceStatus @default(PRESENT)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+}
+
+model TimeOffType {
+  id                 String            @id @default(cuid())
+  code               String            @unique
+  name               String
+  unit               TimeOffUnit       @default(DAYS)
+  requiresAllocation Boolean           @default(true)
+  isActive           Boolean           @default(true)
+  allocations        LeaveAllocation[]
+  requests           TimeOffRequest[]
+}
+
+model LeaveAllocation {
+  id              String           @id @default(cuid())
+  employeeId      String
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  timeOffTypeId   String
+  timeOffType     TimeOffType      @relation(fields: [timeOffTypeId], references: [id])
+  validFrom       DateTime
+  validTo         DateTime
+  allocatedAmount Decimal          @db.Decimal(5, 2)
+  takenAmount     Decimal          @default(0) @db.Decimal(5, 2)
+  remainingAmount Decimal          @default(0) @db.Decimal(5, 2)
+  isActive        Boolean          @default(true)
+  requests        TimeOffRequest[]
+}
+
+model TimeOffRequest {
+  id                String           @id @default(cuid())
+  employeeId        String
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  timeOffTypeId     String
+  timeOffType       TimeOffType      @relation(fields: [timeOffTypeId], references: [id])
+  startDate         DateTime
+  endDate           DateTime
+  duration          Decimal          @db.Decimal(5, 2)
+  unit              TimeOffUnit      @default(DAYS)
+  status            RequestStatus    @default(PENDING)
+  reason            String?
+  leaveAllocationId String?
+  leaveAllocation   LeaveAllocation? @relation(fields: [leaveAllocationId], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+enum PayrunStatus {
+  DRAFT
+  COMPUTED
+  VALIDATED
+  PAID
+}
+
+enum CalculationMethod {
+  FIXED
+  PERCENTAGE
+}
+
+enum RuleCategory {
+  BASIC_SALARY
+  ALLOWANCE
+  DEDUCTION
+}
+
+model SalaryStructure {
+  id           String       @id @default(cuid())
+  code         String       @unique
+  name         String
+  payFrequency String       @default("MONTHLY")
+  isActive     Boolean      @default(true)
+  rules        SalaryRule[]
+  contracts    Contract[]
+  payruns      Payrun[]
+}
+
+model SalaryRule {
+  id                String            @id @default(cuid())
+  code              String            @unique
+  name              String
+  category          RuleCategory
+  calculationMethod CalculationMethod @default(FIXED)
+  amount            Decimal?          @db.Decimal(14, 2)
+  percentage        Decimal?          @db.Decimal(5, 2)
+  formula           String?
+  sequence          Int               @default(0)
+  structureId       String?
+  structure         SalaryStructure?  @relation(fields: [structureId], references: [id])
+  baseRuleId        String?
+  baseRule          SalaryRule?       @relation("BaseRule", fields: [baseRuleId], references: [id])
+  dependentRules    SalaryRule[]      @relation("BaseRule")
+}
+
+model Payrun {
+  id             String           @id @default(cuid())
+  reference      String           @unique
+  periodStart    DateTime
+  periodEnd      DateTime
+  payFrequency   String           @default("MONTHLY")
+  status         PayrunStatus     @default(DRAFT)
+  structureId    String?
+  structure      SalaryStructure? @relation(fields: [structureId], references: [id])
+  structureSnapshot Json?
+  grossTotal     Decimal          @default(0) @db.Decimal(14, 2)
+  deductionTotal Decimal          @default(0) @db.Decimal(14, 2)
+  netTotal       Decimal          @default(0) @db.Decimal(14, 2)
+  paidAt         DateTime?
+  payslips       Payslip[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model Payslip {
+  id          String   @id @default(cuid())
+  reference   String   @unique
+  payrunId    String
+  payrun      Payrun   @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  contractId  String?
+  contract    Contract? @relation(fields: [contractId], references: [id])
+  periodStart DateTime
+  periodEnd   DateTime
+  grossPay    Decimal  @db.Decimal(14, 2)
+  netPay      Decimal  @db.Decimal(14, 2)
+  status      String   @default("DRAFT")
+  lines       PayslipLine[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model PayslipLine {
+  id          String   @id @default(cuid())
+  payslipId   String
+  payslip     Payslip  @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  ruleCode    String
+  ruleName    String
+  category    RuleCategory
+  amount      Decimal  @db.Decimal(14, 2)
+  sequence    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  resource    String
+  actorUserId String?
+  createdAt   DateTime @default(now())
 }

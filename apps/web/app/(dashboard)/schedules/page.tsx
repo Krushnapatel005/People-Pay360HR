@@ -4,8 +4,14 @@ import { Plus, Clock, CalendarDays } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/layout/breadcrumbs';
 import { StatusBadge } from '../../../components/ui/status-badge';
 import { EmptyState } from '../../../components/shared/empty-state';
-import { MOCK_SCHEDULES } from '../../../lib/mock-data';
+import { useQuery } from '@tanstack/react-query';
+import { schedulesApi } from '../../../lib/schedules-api';
 import type { WorkingSchedule, DayOfWeek } from '../../../lib/types';
+
+const DAYS_MAP: Record<number, DayOfWeek> = {
+  1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday',
+  5: 'friday', 6: 'saturday', 0: 'sunday'
+};
 
 const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -13,18 +19,37 @@ const DAY_LABELS: Record<DayOfWeek, string> = {
   friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
 };
 
-function ScheduleDayGrid({ schedule }: { schedule: WorkingSchedule }) {
+function calculateHours(startTime: string, endTime: string, breakMinutes: number = 0): number {
+  if (!startTime || !endTime) return 0;
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  const sTotal = sh * 60 + sm;
+  let eTotal = eh * 60 + em;
+  if (eTotal < sTotal) eTotal += 24 * 60; // overnight
+  const worked = eTotal - sTotal - breakMinutes;
+  return worked > 0 ? Number((worked / 60).toFixed(2)) : 0;
+}
+
+function ScheduleDayGrid({ schedule }: { schedule: any }) {
   return (
     <div className="flex gap-1.5 mt-3">
       {DAYS.map((day) => {
-        const dayData = schedule.days.find((d) => d.day === day);
-        const isWork = dayData?.isWorkDay ?? false;
+        const dayData = schedule.days?.find((d: any) => 
+          (d.day === day) || (d.dayOfWeek !== undefined && DAYS_MAP[d.dayOfWeek] === day)
+        );
+        const isWork = !!dayData && (dayData.isWorkDay !== false); // Default to true if mapped from DB
         const isWeekend = day === 'saturday' || day === 'sunday';
+        
+        let displayHours = dayData?.hours;
+        if (!displayHours && dayData?.startTime && dayData?.endTime) {
+          displayHours = calculateHours(dayData.startTime, dayData.endTime, dayData.breakMinutes);
+        }
+
         return (
           <div key={day} className="flex flex-col items-center gap-1">
             <span className="text-[9px] font-medium text-slate-500">{DAY_LABELS[day]}</span>
             <div
-              title={isWork ? `${dayData?.startTime ?? ''}–${dayData?.endTime ?? ''} (${dayData?.hours ?? 0}h)` : 'Off'}
+              title={isWork ? `${dayData?.startTime ?? ''}–${dayData?.endTime ?? ''} (${displayHours ?? 0}h)` : 'Off'}
               className={`w-8 h-8 rounded-lg flex items-center justify-center text-[9px] font-semibold transition-all ${
                 isWork
                   ? isWeekend
@@ -33,7 +58,7 @@ function ScheduleDayGrid({ schedule }: { schedule: WorkingSchedule }) {
                   : 'bg-slate-800/50 text-slate-700 border border-slate-800'
               }`}
             >
-              {isWork ? `${dayData?.hours ?? '?'}h` : '—'}
+              {isWork ? `${displayHours ?? '?'}h` : '—'}
             </div>
           </div>
         );
@@ -44,7 +69,13 @@ function ScheduleDayGrid({ schedule }: { schedule: WorkingSchedule }) {
 
 export default function SchedulesPage() {
   const [selected, setSelected] = useState<string | null>(null);
-  const selectedSchedule = MOCK_SCHEDULES.find((s) => s.id === selected);
+
+  const { data: schedules = [], isLoading } = useQuery({
+    queryKey: ['schedules'],
+    queryFn: schedulesApi.getAll,
+  });
+
+  const selectedSchedule = schedules.find((s: any) => s.id === selected);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -60,8 +91,11 @@ export default function SchedulesPage() {
         </button>
       </div>
 
+      {isLoading ? (
+        <div className="py-16 text-center text-slate-400 text-sm">Loading schedules...</div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {MOCK_SCHEDULES.map((schedule) => (
+        {schedules.map((schedule: any) => (
           <div
             key={schedule.id}
             onClick={() => setSelected(selected === schedule.id ? null : schedule.id)}
@@ -94,22 +128,36 @@ export default function SchedulesPage() {
             {selected === schedule.id && (
               <div className="mt-4 pt-4 border-t border-surface-border dark:border-slate-800 animate-slide-up">
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Detail</p>
-                <div className="space-y-1.5">
-                  {schedule.days.filter((d) => d.isWorkDay).map((d) => (
-                    <div key={d.day} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 capitalize w-20">{d.day}</span>
-                      <span className="text-slate-400">{d.startTime} – {d.endTime}</span>
-                      <span className="text-slate-300 font-medium">{d.hours}h</span>
-                    </div>
-                  ))}
+                <div className="space-y-1">
+                  {DAYS.map((day) => {
+                    const d = schedule.days?.find((dx: any) => 
+                      (dx.day === day) || (dx.dayOfWeek !== undefined && DAYS_MAP[dx.dayOfWeek] === day)
+                    );
+                    const isWork = !!d && (d.isWorkDay !== false);
+                    if (!isWork) return null;
+                    
+                    let displayHours = d.hours;
+                    if (!displayHours && d.startTime && d.endTime) {
+                      displayHours = calculateHours(d.startTime, d.endTime, d.breakMinutes);
+                    }
+                    
+                    return (
+                      <div key={day} className="flex items-center justify-between py-2 text-xs">
+                        <span className="text-slate-500 capitalize w-20">{day}</span>
+                        <span className="text-slate-400">{d.startTime} – {d.endTime}</span>
+                        <span className="text-slate-300 font-medium">{displayHours}h</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
         ))}
       </div>
+      )}
 
-      {MOCK_SCHEDULES.length === 0 && (
+      {!isLoading && schedules.length === 0 && (
         <EmptyState icon={CalendarDays} title="No schedules yet" description="Create a working schedule to assign to employees." />
       )}
     </div>

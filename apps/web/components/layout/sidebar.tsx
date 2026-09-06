@@ -16,14 +16,14 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   href?: string;
-  /** ids that are checked against ROLE_NAV_ACCESS */
-  accessId?: string;
+  /** array of roles that can access this item */
+  roles?: string[];
   children?: {
     id: string;
     label: string;
     href: string;
     badge?: number;
-    accessId?: string;
+    roles?: string[];
   }[];
   badge?: number;
 }
@@ -34,26 +34,26 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Dashboard',
     icon: <LayoutDashboard className="w-4 h-4" />,
     href: '/dashboard',
-    accessId: 'dashboard',
+    roles: ['employee', 'hr_manager', 'time_off_admin', 'payroll_user', 'payroll_admin', 'admin'],
   },
   {
     id: 'employees',
     label: 'Employees',
     icon: <Users className="w-4 h-4" />,
-    accessId: 'employees',
+    roles: ['hr_manager', 'admin'],
     children: [
-      { id: 'emp-list', label: 'All Employees', href: '/employees',     accessId: 'employees' },
-      { id: 'emp-new',  label: 'New Employee',  href: '/employees/new', accessId: 'employees' },
+      { id: 'emp-list', label: 'All Employees', href: '/employees' },
+      { id: 'emp-new',  label: 'New Employee',  href: '/employees/new' },
     ],
   },
   {
     id: 'contracts',
     label: 'Contracts',
     icon: <FileText className="w-4 h-4" />,
-    accessId: 'contracts',
+    roles: ['hr_manager', 'admin'],
     children: [
-      { id: 'con-list', label: 'Contracts',         href: '/contracts',  accessId: 'contracts' },
-      { id: 'sch-list', label: 'Working Schedules', href: '/schedules',  accessId: 'contracts' },
+      { id: 'con-list', label: 'Contracts',         href: '/contracts' },
+      { id: 'sch-list', label: 'Working Schedules', href: '/schedules' },
     ],
   },
   {
@@ -61,29 +61,29 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Attendance',
     icon: <CalendarClock className="w-4 h-4" />,
     href: '/attendance',
-    accessId: 'attendance',
+    roles: ['employee', 'hr_manager', 'admin'],
   },
   {
     id: 'time-off',
     label: 'Time Off',
     icon: <Umbrella className="w-4 h-4" />,
-    accessId: 'time-off',
+    roles: ['employee', 'hr_manager', 'time_off_admin', 'admin'],
     children: [
-      { id: 'tor-list', label: 'Requests',    href: '/time-off',             badge: 3, accessId: 'time-off-requests' },
-      { id: 'tot-list', label: 'Types',       href: '/time-off/types',              accessId: 'time-off' },
-      { id: 'la-list',  label: 'Allocations', href: '/time-off/allocations',        accessId: 'time-off' },
+      { id: 'tor-list', label: 'Requests',    href: '/time-off',             badge: 3 },
+      { id: 'tot-list', label: 'Types',       href: '/time-off/types',              roles: ['hr_manager', 'time_off_admin', 'admin'] },
+      { id: 'la-list',  label: 'Allocations', href: '/time-off/allocations',        roles: ['hr_manager', 'time_off_admin', 'admin'] },
     ],
   },
   {
     id: 'payroll',
     label: 'Payroll',
     icon: <Banknote className="w-4 h-4" />,
-    accessId: 'payroll',
+    roles: ['payroll_user', 'payroll_admin', 'admin', 'employee'],
     children: [
-      { id: 'pr-list', label: 'Payruns',           href: '/payroll',                     accessId: 'payroll-payruns' },
-      { id: 'ps-list', label: 'Payslips',          href: '/payroll/payslips',            accessId: 'payroll-payslips' },
-      { id: 'ss-list', label: 'Salary Structures', href: '/payroll/salary-structures',   accessId: 'payroll' },
-      { id: 'sr-list', label: 'Salary Rules',      href: '/payroll/salary-rules',        accessId: 'payroll' },
+      { id: 'pr-list', label: 'Payruns',           href: '/payroll',                     roles: ['payroll_user', 'payroll_admin', 'admin'] },
+      { id: 'ps-list', label: 'Payslips',          href: '/payroll/payslips' },
+      { id: 'ss-list', label: 'Salary Structures', href: '/payroll/salary-structures',   roles: ['payroll_admin', 'admin'] },
+      { id: 'sr-list', label: 'Salary Rules',      href: '/payroll/salary-rules',        roles: ['payroll_admin', 'admin'] },
     ],
   },
   {
@@ -91,21 +91,21 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Analytics',
     icon: <BarChart3 className="w-4 h-4" />,
     href: '/analytics',
-    accessId: 'analytics',
+    roles: ['hr_manager', 'payroll_user', 'payroll_admin', 'admin'],
   },
   {
     id: 'users',
     label: 'User Management',
     icon: <Shield className="w-4 h-4" />,
     href: '/users',
-    accessId: 'users',
+    roles: ['admin'],
   },
   {
     id: 'settings',
     label: 'Settings',
     icon: <Settings className="w-4 h-4" />,
     href: '/settings',
-    accessId: 'settings',
+    roles: ['admin'],
   },
 ];
 
@@ -117,7 +117,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { hasNavAccess } = useRole();
+  const { role } = useRole();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(
     new Set(['employees', 'payroll', 'time-off'])
   );
@@ -134,12 +134,11 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
 
   // Filter nav items by role
   const visibleItems = NAV_ITEMS.filter((item) => {
-    if (!item.accessId) return true;
-    // For items with children, show if any child or parent accessId matches
+    if (!item.roles) return true;
     if (item.children) {
-      return item.children.some((c) => hasNavAccess(c.accessId ?? item.accessId ?? ''));
+      return item.children.some((c) => (c.roles ?? item.roles ?? []).includes(role));
     }
-    return hasNavAccess(item.accessId);
+    return item.roles.includes(role);
   });
 
   return (
@@ -187,7 +186,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5 scrollbar-thin" aria-label="Main navigation">
         {visibleItems.map((item) => {
           const visibleChildren = item.children?.filter((c) =>
-            hasNavAccess(c.accessId ?? item.accessId ?? '')
+            (c.roles ?? item.roles ?? []).includes(role)
           );
           const hasChildren = !!visibleChildren?.length;
           const isExpanded = expandedItems.has(item.id);

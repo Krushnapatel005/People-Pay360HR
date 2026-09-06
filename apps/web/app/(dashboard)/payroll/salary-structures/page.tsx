@@ -4,9 +4,15 @@ import Link from 'next/link';
 import { Plus, Code, Hash } from 'lucide-react';
 import { Badge } from '../../../../components/ui/badge';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
-import { MOCK_SALARY_STRUCTURES } from '../../../../lib/mock-data';
+import { useQuery } from '@tanstack/react-query';
+import { payrollApi } from '../../../../lib/payroll-api';
 
 export default function SalaryStructuresPage() {
+  const { data: structures = [], isLoading } = useQuery({
+    queryKey: ['salary-structures'],
+    queryFn: payrollApi.getSalaryStructures,
+  });
+
   return (
     <div className="space-y-5 animate-fade-in">
       <Breadcrumbs />
@@ -20,8 +26,13 @@ export default function SalaryStructuresPage() {
         </Link>
       </div>
 
+      {isLoading ? (
+        <div className="py-16 text-center text-slate-400 text-sm">Loading structures...</div>
+      ) : structures.length === 0 ? (
+        <div className="py-16 text-center text-slate-500 text-sm">No structures found</div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {MOCK_SALARY_STRUCTURES.map((ss) => (
+        {structures.map((ss: any) => (
           <Link key={ss.id} href={`/payroll/salary-structures/${ss.id}`} className="block bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden hover:border-brand-500/30 transition-all group">
             <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -38,7 +49,7 @@ export default function SalaryStructuresPage() {
             <div className="px-5 py-4">
               <div className="flex items-center justify-between text-xs mb-3">
                 <span className="text-slate-500">Rules</span>
-                <span className="text-white font-semibold">{ss.rules.length}</span>
+                <span className="text-white font-semibold">{ss.rules?.length ?? 0}</span>
               </div>
               {ss.parentName && (
                 <div className="flex items-center justify-between text-xs mb-3">
@@ -47,20 +58,21 @@ export default function SalaryStructuresPage() {
                 </div>
               )}
               <div className="space-y-1.5 mt-3">
-                {ss.rules.slice(0, 4).map((rule) => (
+                {(ss.rules || []).slice(0, 4).map((rule: any) => (
                   <div key={rule.id} className="flex items-center justify-between text-[11px]">
                     <span className="text-slate-500 font-mono">{rule.code}</span>
                     <span className="text-slate-400">{rule.name}</span>
                   </div>
                 ))}
-                {ss.rules.length > 4 && (
-                  <p className="text-[11px] text-slate-600">+{ss.rules.length - 4} more rules</p>
+                {(ss.rules?.length ?? 0) > 4 && (
+                  <p className="text-[11px] text-slate-600">+{(ss.rules?.length ?? 0) - 4} more rules</p>
                 )}
               </div>
             </div>
           </Link>
         ))}
       </div>
+      )}
     </div>
   );
 }

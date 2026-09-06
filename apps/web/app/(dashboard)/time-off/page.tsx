@@ -7,9 +7,9 @@ import { StatusBadge } from '../../../components/ui/status-badge';
 import { PermissionGate } from '../../../components/shared/permission-gate';
 import { ConfirmDialog } from '../../../components/shared/confirm-dialog';
 import { EmptyState } from '../../../components/shared/empty-state';
-import { MOCK_TIME_OFF_REQUESTS, MOCK_TIME_OFF_TYPES } from '../../../lib/mock-data';
 import { formatDate } from '../../../lib/utils';
-import type { TimeOffRequest, TimeOffRequestStatus } from '../../../lib/types';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { timeOffApi } from '../../../lib/time-off-api';
 
 function BalanceBar({ used, total, color }: { used: number; total: number; color: string }) {
   const pct = Math.min((used / total) * 100, 100);
@@ -24,41 +24,58 @@ function BalanceBar({ used, total, color }: { used: number; total: number; color
 }
 
 export default function TimeOffPage() {
-  const [requests, setRequests] = useState<TimeOffRequest[]>(MOCK_TIME_OFF_REQUESTS);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | TimeOffRequestStatus>('all');
-  const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject'; request: TimeOffRequest } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
+  const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject'; request: any } | null>(null);
 
-  const filtered = requests.filter((r) => {
-    const matchSearch = r.employeeName.toLowerCase().includes(search.toLowerCase()) ||
-      r.timeOffTypeName.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || r.status === statusFilter;
+  const { data: requests = [], isLoading } = useQuery({
+    queryKey: ['time-off-requests'],
+    queryFn: timeOffApi.getRequests,
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => timeOffApi.approveRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+      setConfirmAction(null);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (id: string) => timeOffApi.rejectRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+      setConfirmAction(null);
+    },
+  });
+
+  const filtered = requests.filter((r: any) => {
+    const empName = r.employee ? `${r.employee.firstName} ${r.employee.lastName}` : 'Unknown';
+    const typeName = r.timeOffType?.name || 'Unknown';
+    const matchSearch = empName.toLowerCase().includes(search.toLowerCase()) ||
+      typeName.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === 'all' || r.status === statusFilter.toUpperCase();
     return matchSearch && matchStatus;
   });
 
-  const pending = requests.filter((r) => r.status === 'pending');
+  const pending = requests.filter((r: any) => r.status === 'PENDING');
 
   function handleApproveReject() {
     if (!confirmAction) return;
-    setLoading(true);
-    setTimeout(() => {
-      setRequests((prev) => prev.map((r) =>
-        r.id === confirmAction.request.id
-          ? { ...r, status: confirmAction.type === 'approve' ? 'approved' : 'rejected', approvedAt: new Date().toISOString() }
-          : r
-      ));
-      setLoading(false);
-      setConfirmAction(null);
-    }, 600);
+    if (confirmAction.type === 'approve') {
+      approveMutation.mutate(confirmAction.request.id);
+    } else {
+      rejectMutation.mutate(confirmAction.request.id);
+    }
   }
 
   const statusCounts = {
     all: requests.length,
-    pending: requests.filter((r) => r.status === 'pending').length,
-    approved: requests.filter((r) => r.status === 'approved').length,
-    rejected: requests.filter((r) => r.status === 'rejected').length,
-    cancelled: requests.filter((r) => r.status === 'cancelled').length,
+    pending: requests.filter((r: any) => r.status === 'PENDING').length,
+    approved: requests.filter((r: any) => r.status === 'APPROVED').length,
+    rejected: requests.filter((r: any) => r.status === 'REFUSED').length,
+    cancelled: requests.filter((r: any) => r.status === 'CANCELLED').length,
   };
 
   return (
@@ -144,69 +161,79 @@ export default function TimeOffPage() {
         </div>
       </div>
 
-      {/* Request list */}
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="py-16 text-center text-slate-400 text-sm">Loading requests...</div>
+      ) : filtered.length === 0 ? (
         <EmptyState icon={Umbrella} title="No requests found" description="No time off requests match your current filter." />
       ) : (
         <div className="space-y-2.5">
-          {filtered.map((req) => (
-            <div
-              key={req.id}
-              className="bg-surface-card dark:bg-slate-900/80 border border-surface-border dark:border-slate-800 rounded-xl p-4 hover:border-slate-600 dark:hover:border-slate-700 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{req.employeeName}</p>
-                    <StatusBadge status={req.status} />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{req.department}</p>
+          {filtered.map((req: any) => {
+            const empName = req.employee ? `${req.employee.firstName} ${req.employee.lastName}` : 'Unknown';
+            const dept = req.employee?.department || '—';
+            const typeName = req.timeOffType?.name || 'Unknown';
+            const isPending = req.status === 'PENDING';
+            const statusKey = req.status ? req.status.toLowerCase() : 'pending';
+            const approvedByName = req.approvedBy ? `${req.approvedBy.firstName} ${req.approvedBy.lastName}` : undefined;
 
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-brand-500" />
-                      {req.timeOffTypeName}
-                    </span>
-                    <span>{formatDate(req.startDate)} – {formatDate(req.endDate)}</span>
-                    <span className="font-medium text-slate-600 dark:text-slate-300">{req.days} day{req.days > 1 ? 's' : ''}</span>
+            return (
+              <div
+                key={req.id}
+                className="bg-surface-card dark:bg-slate-900/80 border border-surface-border dark:border-slate-800 rounded-xl p-4 hover:border-slate-600 dark:hover:border-slate-700 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{empName}</p>
+                      <StatusBadge status={statusKey} />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">{dept}</p>
+  
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-brand-500" />
+                        {typeName}
+                      </span>
+                      <span>{formatDate(req.startDate)} – {formatDate(req.endDate)}</span>
+                      <span className="font-medium text-slate-600 dark:text-slate-300">{req.days} day{req.days > 1 ? 's' : ''}</span>
+                    </div>
+  
+                    {req.description && (
+                      <p className="text-xs text-slate-500 mt-2 italic">"{req.description}"</p>
+                    )}
                   </div>
-
-                  {req.description && (
-                    <p className="text-xs text-slate-500 mt-2 italic">"{req.description}"</p>
+  
+                  {/* Approval actions — gated */}
+                  {isPending && (
+                    <PermissionGate allow={['timeoff.approve', 'timeoff.reject']}>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setConfirmAction({ type: 'approve', request: req })}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => setConfirmAction({ type: 'reject', request: req })}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Reject
+                        </button>
+                      </div>
+                    </PermissionGate>
+                  )}
+  
+                  {!isPending && approvedByName && (
+                    <div className="text-[10px] text-slate-500 shrink-0 text-right">
+                      By {approvedByName}<br />
+                      {req.approvedAt ? formatDate(req.approvedAt) : ''}
+                    </div>
                   )}
                 </div>
-
-                {/* Approval actions — gated */}
-                {req.status === 'pending' && (
-                  <PermissionGate allow={['timeoff.approve', 'timeoff.reject']}>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => setConfirmAction({ type: 'approve', request: req })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => setConfirmAction({ type: 'reject', request: req })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        Reject
-                      </button>
-                    </div>
-                  </PermissionGate>
-                )}
-
-                {req.status !== 'pending' && req.approvedByName && (
-                  <div className="text-[10px] text-slate-500 shrink-0 text-right">
-                    By {req.approvedByName}<br />
-                    {req.approvedAt ? formatDate(req.approvedAt) : ''}
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -214,13 +241,13 @@ export default function TimeOffPage() {
       {confirmAction && (
         <ConfirmDialog
           open
-          onClose={() => !loading && setConfirmAction(null)}
+          onClose={() => !(approveMutation.isPending || rejectMutation.isPending) && setConfirmAction(null)}
           onConfirm={handleApproveReject}
           title={confirmAction.type === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'}
-          description={`Are you sure you want to ${confirmAction.type} the leave request from ${confirmAction.request.employeeName} for ${confirmAction.request.days} day(s)?`}
+          description={`Are you sure you want to ${confirmAction.type} the leave request from ${confirmAction.request.employee ? confirmAction.request.employee.firstName : 'Unknown'} for ${confirmAction.request.days} day(s)?`}
           confirmLabel={confirmAction.type === 'approve' ? 'Approve' : 'Reject'}
           variant={confirmAction.type === 'approve' ? 'info' : 'danger'}
-          loading={loading}
+          loading={approveMutation.isPending || rejectMutation.isPending}
         />
       )}
     </div>

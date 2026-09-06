@@ -4,10 +4,16 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Badge } from '../../../../components/ui/badge';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
-import { MOCK_PAYSLIPS } from '../../../../lib/mock-data';
 import { formatDate, formatCurrency } from '../../../../lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { payrollApi } from '../../../../lib/payroll-api';
 
 export default function PayslipsPage() {
+  const { data: payslips = [], isLoading } = useQuery({
+    queryKey: ['payslips'],
+    queryFn: payrollApi.getPayslips,
+  });
+
   return (
     <div className="space-y-5 animate-fade-in">
       <Breadcrumbs />
@@ -32,13 +38,15 @@ export default function PayslipsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {MOCK_PAYSLIPS.length === 0 ? (
+            {isLoading ? (
+              <tr><td colSpan={7} className="py-12 text-center text-slate-500">Loading payslips...</td></tr>
+            ) : payslips.length === 0 ? (
               <tr><td colSpan={7} className="py-12 text-center text-slate-500">No payslips found</td></tr>
             ) : (
-              MOCK_PAYSLIPS.map((ps) => (
+              payslips.map((ps: any) => (
                 <tr key={ps.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="py-3.5 px-4 font-mono text-[11px] text-brand-400">{ps.ref}</td>
-                  <td className="py-3.5 px-4 font-medium text-white">{ps.employeeName}</td>
+                  <td className="py-3.5 px-4 font-medium text-white">{ps.employee ? `${ps.employee.firstName} ${ps.employee.lastName}` : 'Unknown'}</td>
                   <td className="py-3.5 px-4 text-slate-400 hidden md:table-cell">{formatDate(ps.dateFrom)} – {formatDate(ps.dateTo)}</td>
                   <td className="py-3.5 px-4 text-slate-400 hidden lg:table-cell">{formatCurrency(ps.grossWage)}</td>
                   <td className="py-3.5 px-4 font-bold text-emerald-400">{formatCurrency(ps.netWage)}</td>

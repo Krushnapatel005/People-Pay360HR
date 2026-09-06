@@ -4,9 +4,15 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Badge } from '../../../../components/ui/badge';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
-import { MOCK_TIME_OFF_TYPES } from '../../../../lib/mock-data';
+import { timeOffApi } from '../../../../lib/time-off-api';
+import { useQuery } from '@tanstack/react-query';
 
 export default function TimeOffTypesPage() {
+  const { data: types = [], isLoading } = useQuery({
+    queryKey: ['time-off-types'],
+    queryFn: timeOffApi.getTypes,
+  });
+
   return (
     <div className="space-y-5 animate-fade-in">
       <Breadcrumbs />
@@ -20,8 +26,11 @@ export default function TimeOffTypesPage() {
         </Link>
       </div>
 
+      {isLoading ? (
+        <div className="py-16 text-center text-slate-400 text-sm">Loading types...</div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {MOCK_TIME_OFF_TYPES.map((type) => (
+        {types.map((type: any) => (
           <div key={type.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-all group cursor-pointer">
             <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-800" style={{ borderLeftColor: type.color, borderLeftWidth: 3 }}>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: type.color + '30', border: `1px solid ${type.color}40`, color: type.color }}>
@@ -54,6 +63,7 @@ export default function TimeOffTypesPage() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

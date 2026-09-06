@@ -6,10 +6,10 @@ import { StatusBadge } from '../../../../components/ui/status-badge';
 import { PermissionGate } from '../../../../components/shared/permission-gate';
 import { ConfirmDialog } from '../../../../components/shared/confirm-dialog';
 import { EmptyState } from '../../../../components/shared/empty-state';
-import { MOCK_LEAVE_ALLOCATIONS } from '../../../../lib/mock-data';
 import { formatDate } from '../../../../lib/utils';
-import type { LeaveAllocation } from '../../../../lib/types';
 import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { timeOffApi } from '../../../../lib/time-off-api';
 
 function BalanceAdjustPreview({ days, onChange }: { days: number; onChange: (n: number) => void }) {
   return (
@@ -34,33 +34,39 @@ function BalanceAdjustPreview({ days, onChange }: { days: number; onChange: (n: 
 }
 
 export default function AllocationsPage() {
-  const [allocations, setAllocations] = useState<LeaveAllocation[]>(MOCK_LEAVE_ALLOCATIONS);
-  const [adjustTarget, setAdjustTarget] = useState<{ alloc: LeaveAllocation; days: number } | null>(null);
-  const [approveTarget, setApproveTarget] = useState<LeaveAllocation | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const [adjustTarget, setAdjustTarget] = useState<{ alloc: any; days: number } | null>(null);
+  const [approveTarget, setApproveTarget] = useState<any | null>(null);
+
+  const { data: allocations = [], isLoading } = useQuery({
+    queryKey: ['time-off-allocations'],
+    queryFn: timeOffApi.getAllocations,
+  });
+
+  const adjustMutation = useMutation({
+    mutationFn: ({ id, days }: { id: string; days: number }) => timeOffApi.updateAllocation(id, { numberOfDays: days }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-off-allocations'] });
+      setAdjustTarget(null);
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => timeOffApi.updateAllocation(id, { status: 'ACTIVE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-off-allocations'] });
+      setApproveTarget(null);
+    },
+  });
 
   function handleAdjust() {
     if (!adjustTarget) return;
-    setLoading(true);
-    setTimeout(() => {
-      setAllocations((prev) => prev.map((a) =>
-        a.id === adjustTarget.alloc.id ? { ...a, numberOfDays: adjustTarget.days } : a
-      ));
-      setLoading(false);
-      setAdjustTarget(null);
-    }, 600);
+    adjustMutation.mutate({ id: adjustTarget.alloc.id, days: adjustTarget.days });
   }
 
   function handleApprove() {
     if (!approveTarget) return;
-    setLoading(true);
-    setTimeout(() => {
-      setAllocations((prev) => prev.map((a) =>
-        a.id === approveTarget.id ? { ...a, status: 'active' } : a
-      ));
-      setLoading(false);
-      setApproveTarget(null);
-    }, 600);
+    approveMutation.mutate(approveTarget.id);
   }
 
   return (
@@ -95,7 +101,9 @@ export default function AllocationsPage() {
         ))}
       </div>
 
-      {allocations.length === 0 ? (
+      {isLoading ? (
+        <div className="py-16 text-center text-slate-400 text-sm">Loading allocations...</div>
+      ) : allocations.length === 0 ? (
         <EmptyState icon={Sliders} title="No allocations" description="Allocate leave days to employees to get started." />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-surface-border dark:border-slate-800 bg-surface-card dark:bg-slate-900/50">
@@ -111,13 +119,17 @@ export default function AllocationsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border dark:divide-slate-800/80">
-              {allocations.map((alloc) => (
+              {allocations.map((alloc: any) => {
+                const empName = alloc.employee ? `${alloc.employee.firstName} ${alloc.employee.lastName}` : 'Unknown';
+                const dept = alloc.employee?.department || '—';
+                const typeName = alloc.timeOffType?.name || 'Unknown';
+                return (
                 <tr key={alloc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="py-3.5 px-4">
-                    <p className="font-medium text-slate-900 dark:text-white">{alloc.employeeName}</p>
-                    <p className="text-[10px] text-slate-500">{alloc.department}</p>
+                    <p className="font-medium text-slate-900 dark:text-white">{empName}</p>
+                    <p className="text-[10px] text-slate-500">{dept}</p>
                   </td>
-                  <td className="py-3.5 px-4 text-slate-400">{alloc.timeOffTypeName}</td>
+                  <td className="py-3.5 px-4 text-slate-400">{typeName}</td>
                   <td className="py-3.5 px-4 text-slate-400 hidden sm:table-cell">{formatDate(alloc.dateFrom)} – {formatDate(alloc.dateTo)}</td>
                   <td className="py-3.5 px-4">
                     <span className="text-sm font-bold text-slate-900 dark:text-white">{alloc.numberOfDays}</span>
@@ -134,7 +146,7 @@ export default function AllocationsPage() {
                           <Sliders className="w-2.5 h-2.5" /> Adjust
                         </button>
                       </PermissionGate>
-                      {alloc.status === 'draft' && (
+                      {alloc.status === 'DRAFT' && (
                         <PermissionGate allow={['timeoff.approve']} fallback={null}>
                           <button
                             onClick={() => setApproveTarget(alloc)}
@@ -147,7 +159,8 @@ export default function AllocationsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -156,20 +169,20 @@ export default function AllocationsPage() {
       {/* Adjust dialog */}
       {adjustTarget && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !loading && setAdjustTarget(null)} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !(adjustMutation.isPending || approveMutation.isPending) && setAdjustTarget(null)} />
           <div className="relative z-10 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 animate-scale-in">
             <h2 className="text-sm font-semibold text-white mb-1">Adjust Allocation</h2>
             <p className="text-xs text-slate-400 mb-4">
-              Adjusting leave for <span className="text-white">{adjustTarget.alloc.employeeName}</span> — {adjustTarget.alloc.timeOffTypeName}
+              Adjusting leave for <span className="text-white">{adjustTarget.alloc.employee ? `${adjustTarget.alloc.employee.firstName} ${adjustTarget.alloc.employee.lastName}` : 'Unknown'}</span> — {adjustTarget.alloc.timeOffType?.name || 'Unknown'}
             </p>
             <BalanceAdjustPreview
               days={adjustTarget.days}
               onChange={(n) => setAdjustTarget((prev) => prev ? { ...prev, days: n } : null)}
             />
             <div className="flex items-center justify-end gap-2 mt-4">
-              <button onClick={() => !loading && setAdjustTarget(null)} disabled={loading} className="px-3 py-1.5 text-xs text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors">Cancel</button>
-              <button onClick={handleAdjust} disabled={loading} className="px-4 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-lg transition-colors disabled:opacity-60">
-                {loading ? 'Saving…' : 'Save Adjustment'}
+              <button onClick={() => !(adjustMutation.isPending || approveMutation.isPending) && setAdjustTarget(null)} disabled={adjustMutation.isPending || approveMutation.isPending} className="px-3 py-1.5 text-xs text-slate-400 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors">Cancel</button>
+              <button onClick={handleAdjust} disabled={adjustMutation.isPending || approveMutation.isPending} className="px-4 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-lg transition-colors disabled:opacity-60">
+                {adjustMutation.isPending || approveMutation.isPending ? 'Saving…' : 'Save Adjustment'}
               </button>
             </div>
           </div>
@@ -178,13 +191,13 @@ export default function AllocationsPage() {
 
       <ConfirmDialog
         open={!!approveTarget}
-        onClose={() => !loading && setApproveTarget(null)}
+        onClose={() => !(adjustMutation.isPending || approveMutation.isPending) && setApproveTarget(null)}
         onConfirm={handleApprove}
-        title={`Approve allocation for ${approveTarget?.employeeName}?`}
-        description={`This will activate ${approveTarget?.numberOfDays} days of ${approveTarget?.timeOffTypeName} for this employee.`}
+        title={`Approve allocation for ${approveTarget?.employee ? approveTarget.employee.firstName : 'Unknown'}?`}
+        description={`This will activate ${approveTarget?.numberOfDays} days of ${approveTarget?.timeOffType?.name} for this employee.`}
         confirmLabel="Approve Allocation"
         variant="info"
-        loading={loading}
+        loading={adjustMutation.isPending || approveMutation.isPending}
       />
     </div>
   );

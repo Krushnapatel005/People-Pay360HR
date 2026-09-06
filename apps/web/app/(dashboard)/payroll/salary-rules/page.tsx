@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Badge } from '../../../../components/ui/badge';
 import { Breadcrumbs } from '../../../../components/layout/breadcrumbs';
-import { MOCK_SALARY_RULES } from '../../../../lib/mock-data';
 import { capitalize } from '../../../../lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { payrollApi } from '../../../../lib/payroll-api';
+import { useRouter } from 'next/navigation';
 
 const CATEGORY_COLORS: Record<string, string> = {
   basic:     'bg-brand-500/10 text-brand-300 border-brand-500/20',
@@ -16,6 +18,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function SalaryRulesPage() {
+  const router = useRouter();
+  const { data: rules = [], isLoading } = useQuery({
+    queryKey: ['salary-rules'],
+    queryFn: payrollApi.getSalaryRules,
+  });
+
   return (
     <div className="space-y-5 animate-fade-in">
       <Breadcrumbs />
@@ -43,8 +51,13 @@ export default function SalaryRulesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {MOCK_SALARY_RULES.map((rule) => (
-              <tr key={rule.id} className="hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => window.location.href = `/payroll/salary-rules/${rule.id}`}>
+            {isLoading ? (
+              <tr><td colSpan={7} className="py-12 text-center text-slate-500">Loading rules...</td></tr>
+            ) : rules.length === 0 ? (
+              <tr><td colSpan={7} className="py-12 text-center text-slate-500">No rules found</td></tr>
+            ) : (
+              rules.map((rule: any) => (
+                <tr key={rule.id} className="hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => router.push(`/payroll/salary-rules/${rule.id}`)}>
                 <td className="py-3.5 px-4 font-medium text-white">{rule.name}</td>
                 <td className="py-3.5 px-4 font-mono text-brand-400 text-[11px]">{rule.code}</td>
                 <td className="py-3.5 px-4">
@@ -61,7 +74,7 @@ export default function SalaryRulesPage() {
                 <td className="py-3.5 px-4 text-slate-400">{rule.sequence}</td>
                 <td className="py-3.5 px-4"><Badge status={rule.isActive ? 'active' : 'inactive'} /></td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

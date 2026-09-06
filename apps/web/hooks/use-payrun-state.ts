@@ -1,38 +1,46 @@
 'use client';
-import { useState, useCallback } from 'react';
-import type { Payrun, PayrunStatus } from '../lib/types';
-import { MOCK_PAYRUNS } from '../lib/mock-data';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { payrollApi } from '../lib/payroll-api';
 
 export function usePayrunState() {
-  const [payruns, setPayruns] = useState<Payrun[]>(MOCK_PAYRUNS);
+  const queryClient = useQueryClient();
 
-  const transition = useCallback((id: string, toStatus: PayrunStatus) => {
-    setPayruns((prev) =>
-      prev.map((pr) => {
-        if (pr.id !== id) return pr;
-        const now = new Date().toISOString();
-        return {
-          ...pr,
-          status: toStatus,
-          computedAt:  toStatus === 'computed'  ? now : pr.computedAt,
-          validatedAt: toStatus === 'validated' ? now : pr.validatedAt,
-          paidAt:      toStatus === 'paid'      ? now : pr.paidAt,
-          // When computed, populate totalGross/Net if they were 0
-          totalGross:  toStatus === 'computed' && pr.totalGross === 0
-            ? pr.employees.reduce((s, e) => s + e.grossWage, 0)
-            : pr.totalGross,
-          totalNet:    toStatus === 'computed' && pr.totalNet === 0
-            ? pr.employees.reduce((s, e) => s + e.netWage, 0)
-            : pr.totalNet,
-        };
-      })
-    );
-  }, []);
+  const { data: payruns = [], isLoading, error } = useQuery({
+    queryKey: ['payruns'],
+    queryFn: payrollApi.getPayruns,
+  });
 
-  const compute  = useCallback((id: string) => transition(id, 'computed'),  [transition]);
-  const validate = useCallback((id: string) => transition(id, 'validated'), [transition]);
-  const markPaid = useCallback((id: string) => transition(id, 'paid'),      [transition]);
-  const cancel   = useCallback((id: string) => transition(id, 'cancelled'), [transition]);
+  const computeMutation = useMutation({
+    mutationFn: (id: string) => payrollApi.computePayrun(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payruns'] }),
+  });
 
-  return { payruns, compute, validate, markPaid, cancel };
+  const validateMutation = useMutation({
+    mutationFn: (id: string) => payrollApi.validatePayrun(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payruns'] }),
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: (id: string) => payrollApi.markPayrunPaid(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payruns'] }),
+  });
+
+  const cancelMutation = useMutation({
+    // We don't have a cancel payrun route yet, but we'll mock it for now if needed.
+    // Or we could do a DELETE or PATCH to status. Assuming no backend support, just throw.
+    mutationFn: async (id: string) => {
+      console.warn('Cancel payrun not implemented on backend yet');
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payruns'] }),
+  });
+
+  return {
+    payruns,
+    isLoading,
+    error,
+    compute: (id: string) => computeMutation.mutate(id),
+    validate: (id: string) => validateMutation.mutate(id),
+    markPaid: (id: string) => markPaidMutation.mutate(id),
+    cancel: (id: string) => cancelMutation.mutate(id),
+  };
 }

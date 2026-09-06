@@ -56,7 +56,7 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ status, variant = 'full', size = 'sm' }: StatusBadgeProps) {
   const config = STATUS_MAP[status] ?? {
-    label: status.replace(/_/g, ' '),
+    label: typeof status === 'string' ? status.replace(/_/g, ' ') : 'Unknown',
     icon: <MinusCircle className="w-3 h-3" />,
     className: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
   };

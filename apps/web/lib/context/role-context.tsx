@@ -1,6 +1,7 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Role } from '../types';
+import { useAuth } from './auth-context';
 
 // ─── Permission Map ───────────────────────────────────────────────────────────
 
@@ -105,18 +106,19 @@ interface RoleContextValue {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<Role>('admin');
+  const { user } = useAuth();
+  // Drive role from the authenticated user — no localStorage fallback
+  const [role, setRoleState] = useState<Role>(user?.role ?? 'employee');
 
+  // Sync whenever the authenticated user changes (login/logout/switch)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('pp360_role') as Role | null;
-      if (saved && ROLE_LABELS[saved]) setRoleState(saved);
-    } catch {}
-  }, []);
+    if (user?.role) {
+      setRoleState(user.role);
+    }
+  }, [user?.role]);
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
-    try { localStorage.setItem('pp360_role', r); } catch {}
   }, []);
 
   const can = useCallback(
